@@ -1,0 +1,131 @@
+{
+  "Ciclo de Reincid\u00eancia": {
+    "slug": "target_reincidencia",
+    "roc_auc": 0.7597426849211538,
+    "report": {
+      "0": {
+        "precision": 0.6828137639225935,
+        "recall": 0.6700351091436422,
+        "f1-score": 0.676364084626408,
+        "support": 65510.0
+      },
+      "1": {
+        "precision": 0.6990295317525514,
+        "recall": 0.7111693462709824,
+        "f1-score": 0.7050471857094709,
+        "support": 70595.0
+      },
+      "accuracy": 0.6913706329671945,
+      "macro avg": {
+        "precision": 0.6909216478375725,
+        "recall": 0.6906022277073123,
+        "f1-score": 0.6907056351679395,
+        "support": 136105.0
+      },
+      "weighted avg": {
+        "precision": 0.691224565362334,
+        "recall": 0.6913706329671945,
+        "f1-score": 0.6912414478456785,
+        "support": 136105.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        43894,
+        21616
+      ],
+      [
+        20390,
+        50205
+      ]
+    ],
+    "n_train": 544418,
+    "n_test": 136105
+  },
+  "Agressor \u00cdntimo (Parceiro/Ex)": {
+    "slug": "autor_parceiro_ou_ex",
+    "roc_auc": 0.9039477991082896,
+    "report": {
+      "0": {
+        "precision": 0.8748890410611478,
+        "recall": 0.7847758579504738,
+        "f1-score": 0.8273860563287382,
+        "support": 87913.0
+      },
+      "1": {
+        "precision": 0.7837525858029418,
+        "recall": 0.8742255424389995,
+        "f1-score": 0.8265205888910986,
+        "support": 78442.0
+      },
+      "accuracy": 0.8269544047368579,
+      "macro avg": {
+        "precision": 0.8293208134320449,
+        "recall": 0.8295007001947367,
+        "f1-score": 0.8269533226099184,
+        "support": 166355.0
+      },
+      "weighted avg": {
+        "precision": 0.831915124897737,
+        "recall": 0.8269544047368579,
+        "f1-score": 0.82697795920666,
+        "support": 166355.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        68992,
+        18921
+      ],
+      [
+        9866,
+        68576
+      ]
+    ],
+    "n_train": 665418,
+    "n_test": 166355
+  },
+  "Encaminhamento DEAM": {
+    "slug": "encaminhamento_delegacia_mulher",
+    "roc_auc": 0.7547520148653073,
+    "report": {
+      "0": {
+        "precision": 0.8957338569324825,
+        "recall": 0.6186671187172038,
+        "f1-score": 0.7318551603126495,
+        "support": 129779.0
+      },
+      "1": {
+        "precision": 0.3549316336240045,
+        "recall": 0.7444772528433946,
+        "f1-score": 0.4806919987642879,
+        "support": 36576.0
+      },
+      "accuracy": 0.6463286345466022,
+      "macro avg": {
+        "precision": 0.6253327452782436,
+        "recall": 0.6815721857802992,
+        "f1-score": 0.6062735795384687,
+        "support": 166355.0
+      },
+      "weighted avg": {
+        "precision": 0.7768292125290628,
+        "recall": 0.6463286345466022,
+        "f1-score": 0.6766326314028309,
+        "support": 166355.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        80290,
+        49489
+      ],
+      [
+        9346,
+        27230
+      ]
+    ],
+    "n_train": 665418,
+    "n_test": 166355
+  }
+}
