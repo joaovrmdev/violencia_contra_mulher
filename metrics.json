@@ -1,255 +1,321 @@
 {
   "Ciclo de Reincid\u00eancia": {
     "slug": "target_reincidencia",
-    "n_train": 59019,
-    "n_test": 14755,
+    "correlations": {
+      "local_residencia": 0.2687984022398796,
+      "violencia_psicologica": 0.21584366581136363,
+      "meio_ameaca": 0.17288111213554527,
+      "autor_alcoolizado": 0.10835524311957462,
+      "idade_paciente": 0.10573760701602429,
+      "violencia_financeira": 0.10439214093035723,
+      "possui_deficiencia": 0.07015394462040939,
+      "meio_enforcamento": 0.06678483373117093,
+      "reside_municipio_ocorrencia": 0.05120604155981164,
+      "violencia_negligencia": 0.04425334239739449,
+      "violencia_tortura": 0.03467202612023836,
+      "meio_objeto_contundente": 0.015101614937552169,
+      "meio_forca_corporal": 0.005259273866633435,
+      "gestante": 0.004979422055153147,
+      "violencia_fisica": -0.03413794253336395,
+      "meio_objeto_perfurante": -0.034985359982021666,
+      "ocorreu_noite_madrugada": -0.05971012609244289,
+      "numero_envolvidos": -0.0905983316651584,
+      "meio_arma_fogo": -0.10153749900997838,
+      "violencia_sexual": -0.1205323727478683
+    },
+    "n_train": 393495,
+    "n_test": 98374,
     "Regress\u00e3o Log\u00edstica": {
-      "roc_auc": 0.7403048556116334,
+      "roc_auc": 0.7437234094510139,
       "report": {
         "0": {
-          "precision": 0.6669991450555713,
-          "recall": 0.6570746771476699,
-          "f1-score": 0.6619997171545751,
-          "support": 7124.0
+          "precision": 0.6683712605471747,
+          "recall": 0.6624429802331475,
+          "f1-score": 0.6653939162530228,
+          "support": 47352.0
         },
         "1": {
-          "precision": 0.6842445392270906,
-          "recall": 0.6937491809723496,
-          "f1-score": 0.6889640812077044,
-          "support": 7631.0
+          "precision": 0.6892811321488278,
+          "recall": 0.6949551174003371,
+          "f1-score": 0.6921064959400375,
+          "support": 51022.0
         },
-        "accuracy": 0.6760420196543545,
+        "accuracy": 0.6793055075528087,
         "macro avg": {
-          "precision": 0.6756218421413309,
-          "recall": 0.6754119290600098,
-          "f1-score": 0.6754818991811398,
-          "support": 14755.0
+          "precision": 0.6788261963480012,
+          "recall": 0.6786990488167424,
+          "f1-score": 0.6787502060965301,
+          "support": 98374.0
         },
         "weighted avg": {
-          "precision": 0.6759181286491236,
-          "recall": 0.6760420196543545,
-          "f1-score": 0.6759451635855767,
-          "support": 14755.0
+          "precision": 0.6792162345124454,
+          "recall": 0.6793055075528087,
+          "f1-score": 0.6792484839313815,
+          "support": 98374.0
         }
       },
       "confusion_matrix": [
         [
-          4681,
-          2443
+          31368,
+          15984
         ],
         [
-          2337,
-          5294
+          15564,
+          35458
         ]
       ]
     },
     "\u00c1rvores de Decis\u00e3o (GBDT)": {
-      "roc_auc": 0.7532771958936078,
+      "roc_auc": 0.7614529853683263,
       "report": {
         "0": {
-          "precision": 0.6775498410863913,
-          "recall": 0.6583380123526109,
-          "f1-score": 0.6678057810052684,
-          "support": 7124.0
+          "precision": 0.6854333842480046,
+          "recall": 0.6728543672917723,
+          "f1-score": 0.6790856290296797,
+          "support": 47352.0
         },
         "1": {
-          "precision": 0.6892633729094855,
-          "recall": 0.707508845498624,
-          "f1-score": 0.6982669425763063,
-          "support": 7631.0
+          "precision": 0.701470389855659,
+          "recall": 0.7134177413664694,
+          "f1-score": 0.7073936237404409,
+          "support": 51022.0
         },
-        "accuracy": 0.6837682141646899,
+        "accuracy": 0.6938926952243479,
         "macro avg": {
-          "precision": 0.6834066069979383,
-          "recall": 0.6829234289256174,
-          "f1-score": 0.6830363617907873,
-          "support": 14755.0
+          "precision": 0.6934518870518318,
+          "recall": 0.6931360543291208,
+          "f1-score": 0.6932396263850603,
+          "support": 98374.0
         },
         "weighted avg": {
-          "precision": 0.6836078526988638,
-          "recall": 0.6837682141646899,
-          "f1-score": 0.6835597033331972,
-          "support": 14755.0
+          "precision": 0.6937510301718639,
+          "recall": 0.6938926952243479,
+          "f1-score": 0.6937676639792848,
+          "support": 98374.0
         }
       },
       "confusion_matrix": [
         [
-          4690,
-          2434
+          31861,
+          15491
         ],
         [
-          2232,
-          5399
+          14622,
+          36400
         ]
       ]
     }
   },
   "Agressor \u00cdntimo (Parceiro/Ex)": {
     "slug": "autor_parceiro_ou_ex",
-    "n_train": 72152,
-    "n_test": 18038,
+    "correlations": {
+      "local_residencia": 0.3284478471108069,
+      "violencia_psicologica": 0.19561177054774848,
+      "autor_alcoolizado": 0.19202082354618935,
+      "meio_ameaca": 0.14224197632215746,
+      "meio_forca_corporal": 0.13110297512250724,
+      "violencia_fisica": 0.12475415928196426,
+      "meio_enforcamento": 0.11092691390444931,
+      "reside_municipio_ocorrencia": 0.0829416937460951,
+      "ocorreu_noite_madrugada": 0.06920644228045095,
+      "gestante": 0.04361073112002083,
+      "violencia_tortura": 0.03851119249653536,
+      "violencia_financeira": 0.03606511990634223,
+      "meio_objeto_contundente": 0.0037583327187141044,
+      "meio_objeto_perfurante": -0.010927215147831197,
+      "idade_paciente": -0.028109813016765038,
+      "possui_deficiencia": -0.06951925946185497,
+      "meio_arma_fogo": -0.10184370267491498,
+      "violencia_negligencia": -0.1410475243633179,
+      "violencia_sexual": -0.19788989577506172,
+      "numero_envolvidos": -0.20952503602340847
+    },
+    "n_train": 481024,
+    "n_test": 120256,
     "Regress\u00e3o Log\u00edstica": {
-      "roc_auc": 0.8780774027956423,
+      "roc_auc": 0.8800655154317572,
       "report": {
         "0": {
-          "precision": 0.8452311633865145,
-          "recall": 0.7604777870913663,
-          "f1-score": 0.8006177265456952,
-          "support": 9544.0
+          "precision": 0.8481228070175438,
+          "recall": 0.7601339664769332,
+          "f1-score": 0.8017214215824475,
+          "support": 63598.0
         },
         "1": {
-          "precision": 0.7581208337742038,
-          "recall": 0.8435366140805274,
-          "f1-score": 0.7985511284480357,
-          "support": 8494.0
+          "precision": 0.7588371063614519,
+          "recall": 0.847206043277207,
+          "f1-score": 0.8005904231365812,
+          "support": 56658.0
         },
-        "accuracy": 0.7995897549617474,
+        "accuracy": 0.8011575306013837,
         "macro avg": {
-          "precision": 0.8016759985803592,
-          "recall": 0.8020072005859469,
-          "f1-score": 0.7995844274968654,
-          "support": 18038.0
+          "precision": 0.8034799566894979,
+          "recall": 0.8036700048770702,
+          "f1-score": 0.8011559223595144,
+          "support": 120256.0
         },
         "weighted avg": {
-          "precision": 0.8042113640890887,
-          "recall": 0.7995897549617474,
-          "f1-score": 0.79964457629392,
-          "support": 18038.0
+          "precision": 0.8060563053230515,
+          "recall": 0.8011575306013837,
+          "f1-score": 0.8011885574430624,
+          "support": 120256.0
         }
       },
       "confusion_matrix": [
         [
-          7258,
-          2286
+          48343,
+          15255
         ],
         [
-          1329,
-          7165
+          8657,
+          48001
         ]
       ]
     },
     "\u00c1rvores de Decis\u00e3o (GBDT)": {
-      "roc_auc": 0.8998945572447865,
+      "roc_auc": 0.9027240127774903,
       "report": {
         "0": {
-          "precision": 0.8693782684485765,
-          "recall": 0.7838432523051132,
-          "f1-score": 0.8243980384594193,
-          "support": 9544.0
+          "precision": 0.8732087665074459,
+          "recall": 0.7818484858014403,
+          "f1-score": 0.82500705148413,
+          "support": 63598.0
         },
         "1": {
-          "precision": 0.781299692568642,
-          "recall": 0.8676712973863904,
-          "f1-score": 0.8222234618173705,
-          "support": 8494.0
+          "precision": 0.7808630275461208,
+          "recall": 0.8725687458081824,
+          "f1-score": 0.8241727098441277,
+          "support": 56658.0
         },
-        "accuracy": 0.8233174409579777,
+        "accuracy": 0.8245908728046834,
         "macro avg": {
-          "precision": 0.8253389805086092,
-          "recall": 0.8257572748457518,
-          "f1-score": 0.8233107501383949,
-          "support": 18038.0
+          "precision": 0.8270358970267834,
+          "recall": 0.8272086158048113,
+          "f1-score": 0.8245898806641289,
+          "support": 120256.0
         },
         "weighted avg": {
-          "precision": 0.8279025270402073,
-          "recall": 0.8233174409579777,
-          "f1-score": 0.8233740416749884,
-          "support": 18038.0
+          "precision": 0.8297005433994866,
+          "recall": 0.8245908728046834,
+          "f1-score": 0.8246139556831782,
+          "support": 120256.0
         }
       },
       "confusion_matrix": [
         [
-          7481,
-          2063
+          49724,
+          13874
         ],
         [
-          1124,
-          7370
+          7220,
+          49438
         ]
       ]
     }
   },
   "Encaminhamento DEAM": {
     "slug": "encaminhamento_delegacia_mulher",
-    "n_train": 72152,
-    "n_test": 18038,
+    "correlations": {
+      "meio_ameaca": 0.16815052958215934,
+      "violencia_psicologica": 0.14750068885517298,
+      "local_residencia": 0.07856642984774508,
+      "autor_alcoolizado": 0.06788160000250804,
+      "meio_enforcamento": 0.04547255770222518,
+      "violencia_tortura": 0.04055028512300257,
+      "ocorreu_noite_madrugada": 0.03804312718442073,
+      "violencia_sexual": 0.03323340224157486,
+      "violencia_financeira": 0.027568350081911698,
+      "meio_forca_corporal": 0.026220129088413743,
+      "reside_municipio_ocorrencia": 0.02283915475158243,
+      "meio_objeto_contundente": 0.014326754294603512,
+      "meio_objeto_perfurante": 0.00032834609288125643,
+      "meio_arma_fogo": -0.001757084267908001,
+      "gestante": -0.006007759209136146,
+      "idade_paciente": -0.011833977997648319,
+      "violencia_fisica": -0.023399302893867893,
+      "possui_deficiencia": -0.02848821166600576,
+      "violencia_negligencia": -0.0898244773135909,
+      "numero_envolvidos": -0.09484561012209063
+    },
+    "n_train": 481024,
+    "n_test": 120256,
     "Regress\u00e3o Log\u00edstica": {
-      "roc_auc": 0.713214652716095,
+      "roc_auc": 0.7208428358753401,
       "report": {
         "0": {
-          "precision": 0.8770915100185912,
-          "recall": 0.6029108981185658,
-          "f1-score": 0.7146042832498843,
-          "support": 14085.0
+          "precision": 0.8835389661096361,
+          "recall": 0.6030015242115137,
+          "f1-score": 0.7167989661005137,
+          "support": 93819.0
         },
         "1": {
-          "precision": 0.33066060315940643,
-          "recall": 0.6989628130533772,
-          "f1-score": 0.44893980014623447,
-          "support": 3953.0
+          "precision": 0.33756625048909755,
+          "recall": 0.7179331996822635,
+          "f1-score": 0.4592139167463073,
+          "support": 26437.0
         },
-        "accuracy": 0.6239605277746979,
+        "accuracy": 0.6282680282064929,
         "macro avg": {
-          "precision": 0.6038760565889988,
-          "recall": 0.6509368555859715,
-          "f1-score": 0.5817720416980594,
-          "support": 18038.0
+          "precision": 0.6105526082993669,
+          "recall": 0.6604673619468886,
+          "f1-score": 0.5880064414234105,
+          "support": 120256.0
         },
         "weighted avg": {
-          "precision": 0.757342015905366,
-          "recall": 0.6239605277746979,
-          "f1-score": 0.6563843197445773,
-          "support": 18038.0
+          "precision": 0.7635126831561022,
+          "recall": 0.6282680282064929,
+          "f1-score": 0.6601716381519943,
+          "support": 120256.0
         }
       },
       "confusion_matrix": [
         [
-          8492,
-          5593
+          56573,
+          37246
         ],
         [
-          1190,
-          2763
+          7457,
+          18980
         ]
       ]
     },
     "\u00c1rvores de Decis\u00e3o (GBDT)": {
-      "roc_auc": 0.7454649641272169,
+      "roc_auc": 0.7551863405868077,
       "report": {
         "0": {
-          "precision": 0.8905447070914697,
-          "recall": 0.615193468228612,
-          "f1-score": 0.7276926306949402,
-          "support": 14085.0
+          "precision": 0.8984358027373452,
+          "recall": 0.6171138042400793,
+          "f1-score": 0.7316647815949602,
+          "support": 93819.0
         },
         "1": {
-          "precision": 0.3476167549350024,
-          "recall": 0.7305843663040729,
-          "f1-score": 0.471087187015741,
-          "support": 3953.0
+          "precision": 0.35639803633496975,
+          "recall": 0.7524303060105155,
+          "f1-score": 0.4836901679006942,
+          "support": 26437.0
         },
-        "accuracy": 0.6404812063421665,
+        "accuracy": 0.6468616950505588,
         "macro avg": {
-          "precision": 0.619080731013236,
-          "recall": 0.6728889172663424,
-          "f1-score": 0.5993899088553406,
-          "support": 18038.0
+          "precision": 0.6274169195361575,
+          "recall": 0.6847720551252974,
+          "f1-score": 0.6076774747478272,
+          "support": 120256.0
         },
         "weighted avg": {
-          "precision": 0.7715628801220432,
-          "recall": 0.6404812063421665,
-          "f1-score": 0.6714579417680151,
-          "support": 18038.0
+          "precision": 0.77927457643363,
+          "recall": 0.6468616950505588,
+          "f1-score": 0.6771502055053238,
+          "support": 120256.0
         }
       },
       "confusion_matrix": [
         [
-          8665,
-          5420
+          57897,
+          35922
         ],
         [
-          1065,
-          2888
+          6545,
+          19892
         ]
       ]
     }
