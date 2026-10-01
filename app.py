@@ -47,6 +47,7 @@ st.markdown("""
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
+        gap: 24px; /* Espaçamento forçado entre o bloco de texto e o número */
         box-shadow: 0 8px 24px rgba(0,0,0,0.04);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
@@ -55,7 +56,10 @@ st.markdown("""
         box-shadow: 0 14px 32px rgba(0,0,0,0.06);
     }
     
-    .cm-info { display: flex; flex-direction: column; }
+    .cm-info { 
+        display: flex; 
+        flex-direction: column; 
+    }
     
     .cm-title {
         font-size: 0.9em;
@@ -76,6 +80,8 @@ st.markdown("""
         font-size: 2.6em;
         font-weight: 800;
         letter-spacing: -1px;
+        flex-shrink: 0; /* Impede que o número seja espremido pelo texto longo */
+        text-align: right;
     }
     
     /* Paleta Pastel Fosca (Menos agressiva aos olhos) */
