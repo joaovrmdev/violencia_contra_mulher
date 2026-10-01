@@ -18,13 +18,13 @@ st.markdown("""
         border: none;
         padding: 20px 25px;
         border-radius: 20px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.04);
         margin-bottom: 15px;
         transition: transform 0.2s ease;
     }
     div[data-testid="stMetric"]:hover {
         transform: translateY(-2px);
-        box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.06);
     }
     
     /* Grid Moderno para a Matriz de Confusão */
@@ -37,7 +37,7 @@ st.markdown("""
         font-family: 'Segoe UI', system-ui, sans-serif;
     }
     
-    /* Cartões Flutuantes (Efeito Neumórfico/Elevado) */
+    /* Cartões Flutuantes (Fundo Branco, Sombra Suave) */
     .cm-card {
         background-color: #ffffff;
         border: none;
@@ -47,12 +47,12 @@ st.markdown("""
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.04);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .cm-card:hover {
         transform: translateY(-3px);
-        box-shadow: 0 14px 32px rgba(0,0,0,0.08);
+        box-shadow: 0 14px 32px rgba(0,0,0,0.06);
     }
     
     .cm-info { display: flex; flex-direction: column; }
@@ -78,11 +78,11 @@ st.markdown("""
         letter-spacing: -1px;
     }
     
-    /* Cores Semânticas aplicadas apenas ao Texto para manter o fundo limpo */
-    .card-tn .cm-title, .card-tn .cm-value { color: #495057; }
-    .card-fp .cm-title, .card-fp .cm-value { color: #fa5252; }
-    .card-fn .cm-title, .card-fn .cm-value { color: #f59f00; }
-    .card-tp .cm-title, .card-tp .cm-value { color: #40c057; }
+    /* Paleta Pastel Fosca (Menos agressiva aos olhos) */
+    .card-tn .cm-title, .card-tn .cm-value { color: #868e96; } /* Cinza Suave */
+    .card-fp .cm-title, .card-fp .cm-value { color: #e08999; } /* Rosa Queimado / Vermelho Pastel */
+    .card-fn .cm-title, .card-fn .cm-value { color: #d4b46a; } /* Dourado Areia / Amarelo Pastel */
+    .card-tp .cm-title, .card-tp .cm-value { color: #82b092; } /* Verde Sálvia / Verde Pastel */
 </style>
 """, unsafe_allow_html=True)
 
