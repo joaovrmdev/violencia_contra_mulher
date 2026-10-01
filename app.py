@@ -10,71 +10,79 @@ st.set_page_config(
     layout="wide"
 )
 
-# Injeção de CSS para Dashboard Profissional e Grid de Confusão
 st.markdown("""
 <style>
     /* Estilização global e dos Cards de Métricas Nativos */
     div[data-testid="stMetric"] {
         background-color: #ffffff;
-        border: 1px solid #e9ecef;
-        border-left: 4px solid #495057;
-        padding: 15px 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        margin-bottom: 10px;
+        border: none;
+        padding: 20px 25px;
+        border-radius: 20px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+        margin-bottom: 15px;
+        transition: transform 0.2s ease;
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.08);
     }
     
     /* Grid Moderno para a Matriz de Confusão */
     .cm-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 16px;
-        margin-top: 10px;
-        margin-bottom: 30px;
+        gap: 20px;
+        margin-top: 15px;
+        margin-bottom: 35px;
         font-family: 'Segoe UI', system-ui, sans-serif;
     }
     
+    /* Cartões Flutuantes (Efeito Neumórfico/Elevado) */
     .cm-card {
-        padding: 20px 25px;
-        border-radius: 8px;
+        background-color: #ffffff;
+        border: none;
+        border-radius: 20px;
+        padding: 25px 30px;
         display: flex;
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .cm-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 32px rgba(0,0,0,0.08);
     }
     
-    .cm-info {
-        display: flex;
-        flex-direction: column;
-    }
+    .cm-info { display: flex; flex-direction: column; }
     
     .cm-title {
-        font-size: 0.85em;
+        font-size: 0.9em;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
     }
     
     .cm-desc {
-        font-size: 0.8em;
-        opacity: 0.75;
+        font-size: 0.85em;
+        color: #adb5bd;
         max-width: 200px;
-        line-height: 1.3;
+        line-height: 1.4;
     }
     
     .cm-value {
-        font-size: 2.2em;
+        font-size: 2.6em;
         font-weight: 800;
         letter-spacing: -1px;
     }
     
-    /* Paleta Semântica Translúcida */
-    .card-tn { background-color: #f8f9fa; color: #343a40; border-left: 5px solid #adb5bd; border-top: 1px solid #e9ecef; border-right: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; }
-    .card-fp { background-color: #fff5f5; color: #c92a2a; border-left: 5px solid #ff8787; border-top: 1px solid #ffe3e3; border-right: 1px solid #ffe3e3; border-bottom: 1px solid #ffe3e3; }
-    .card-fn { background-color: #fff9db; color: #b08d00; border-left: 5px solid #fcc419; border-top: 1px solid #ffec99; border-right: 1px solid #ffec99; border-bottom: 1px solid #ffec99; }
-    .card-tp { background-color: #f4fce3; color: #2b8a3e; border-left: 5px solid #69db7c; border-top: 1px solid #d8f5a2; border-right: 1px solid #d8f5a2; border-bottom: 1px solid #d8f5a2; }
+    /* Cores Semânticas aplicadas apenas ao Texto para manter o fundo limpo */
+    .card-tn .cm-title, .card-tn .cm-value { color: #495057; }
+    .card-fp .cm-title, .card-fp .cm-value { color: #fa5252; }
+    .card-fn .cm-title, .card-fn .cm-value { color: #f59f00; }
+    .card-tp .cm-title, .card-tp .cm-value { color: #40c057; }
 </style>
 """, unsafe_allow_html=True)
 
