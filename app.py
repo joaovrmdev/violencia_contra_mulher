@@ -1,4 +1,3 @@
-# app.py
 import json
 import joblib
 import streamlit as st
@@ -10,6 +9,68 @@ st.set_page_config(
     page_title="ML - Violencia contra a Mulher (SINAN)",
     layout="wide"
 )
+
+# Injeção de CSS e HTML Customizado para Estilização de Dashboard Profissional
+st.markdown("""
+<style>
+    /* Estilização global e dos Cards de Métricas */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff;
+        border: 1px solid #e6e6e6;
+        border-left: 4px solid #ff4b4b;
+        padding: 10px 20px;
+        border-radius: 6px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+        margin-bottom: 10px;
+    }
+    
+    /* Estilização da Matriz de Confusão Customizada */
+    .cm-wrapper {
+        margin-top: 15px;
+        margin-bottom: 25px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .cm-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 6px;
+        text-align: center;
+    }
+    .cm-table th {
+        background-color: #f8f9fa;
+        color: #495057;
+        font-size: 0.9em;
+        font-weight: 600;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #e9ecef;
+    }
+    .cm-cell {
+        padding: 15px;
+        border-radius: 6px;
+        font-size: 1.4em;
+        font-weight: 700;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .cm-label {
+        font-size: 0.55em;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        opacity: 0.8;
+    }
+    
+    /* Cores Semânticas da Matriz */
+    .bg-tn { background-color: #f8f9fa; border: 1px solid #dee2e6; color: #495057; }
+    .bg-tp { background-color: #ebfbee; border: 1px solid #b2f2bb; color: #2b8a3e; }
+    .bg-fp { background-color: #fff5f5; border: 1px solid #ffc9c9; color: #c92a2a; }
+    .bg-fn { background-color: #fff3cd; border: 1px solid #ffe69c; color: #997404; }
+</style>
+""", unsafe_allow_html=True)
 
 # 1. Carregamento dos Artefatos
 @st.cache_resource
@@ -24,42 +85,41 @@ def load_assets():
         slug = data["slug"]
         models[f"{label} - Regressão Logística"] = joblib.load(f"model_{slug}_lr.joblib")
         models[f"{label} - Árvores de Decisão (GBDT)"] = joblib.load(f"model_{slug}_tree.joblib")
-    
+        
     return models, metrics, samples
 
 try:
     models, metrics_data, samples_data = load_assets()
 except Exception as e:
     st.error(f"Erro ao carregar arquivos gerados pelo script de treino: {e}")
-    st.info("Certifique-se de que os arquivos 'metrics.json', 'test_samples.json' e os modelos '.joblib' estao no diretorio.")
     st.stop()
 
-# 2. Barra Lateral: Parametros
-st.sidebar.title("Parametros")
-selected_theme = st.sidebar.selectbox("Cenario de Analise:", list(metrics_data.keys()))
+# 2. Barra Lateral: Parâmetros
+st.sidebar.title("Parâmetros")
+selected_theme = st.sidebar.selectbox("Cenário de Análise:", list(metrics_data.keys()))
 theme_metrics = metrics_data[selected_theme]
 
 selected_algo = st.sidebar.radio(
-    "Familia de Algoritmo:",
+    "Família de Algoritmo:",
     ["Árvores de Decisão (GBDT)", "Regressão Logística"]
 )
 
 model_key = f"{selected_theme} - {selected_algo}"
 active_model = models[model_key]
 
-st.title("Avaliacao e Inferencia - Violencia contra a Mulher")
+st.title("Avaliação e Inferência - Violência contra a Mulher")
 st.markdown("Modelos supervisionados de triagem e risco com base nos microdados do SINAN/DATASUS.")
 
 tab_eval, tab_corr, tab_sim = st.tabs([
     "Desempenho dos Modelos",
-    "Matriz de Correlacao Completa",
-    "Simulador e Casos de Teste"
+    "Matriz de Correlação",
+    "Simulador e Casos"
 ])
 
-# ==================== ABA 1: COMPARACAO DOS MODELOS ====================
+# ==================== ABA 1: COMPARAÇÃO DOS MODELOS ====================
 with tab_eval:
-    st.subheader(f"Validacao no Conjunto de Teste - {selected_theme}")
-    st.caption(f"Amostragem: {theme_metrics['n_train']:,} registros no treino (80%) | {theme_metrics['n_test']:,} registros no teste (20% nao vistos)")
+    st.subheader(f"Validação no Conjunto de Teste - {selected_theme}")
+    st.caption(f"Amostragem: {theme_metrics['n_train']:,} registros no treino (80%) | {theme_metrics['n_test']:,} registros no teste (20% não vistos)")
     
     comp_col1, comp_col2 = st.columns(2)
     for col, algo_name in zip([comp_col1, comp_col2], ["Árvores de Decisão (GBDT)", "Regressão Logística"]):
@@ -73,22 +133,42 @@ with tab_eval:
             c2.metric("Recall (Classe 1)", f"{rep['1']['recall']:.3f}")
             c3.metric("F1-Score", f"{rep['1']['f1-score']:.3f}")
             
-            st.markdown("**Matriz de Confusao**")
-            cm_df = pd.DataFrame(
-                m_data["confusion_matrix"],
-                columns=["Pred 0 (Nao)", "Pred 1 (Sim)"],
-                index=["Real 0 (Nao)", "Real 1 (Sim)"]
-            )
-            st.dataframe(cm_df, use_container_width=True)
+            st.markdown("#### Matriz de Confusão")
             
-            with st.expander("Ver Relatorio Completo de Classificacao"):
+            tn, fp = m_data["confusion_matrix"][0]
+            fn, tp = m_data["confusion_matrix"][1]
+            
+            html_cm = f"""
+            <div class="cm-wrapper">
+                <table class="cm-table">
+                    <tr>
+                        <th></th>
+                        <th>Previsto: NÃO (0)</th>
+                        <th>Previsto: SIM (1)</th>
+                    </tr>
+                    <tr>
+                        <th>Real: NÃO (0)</th>
+                        <td><div class="cm-cell bg-tn"><span class="cm-label">Verdadeiro Negativo</span>{tn:,}</div></td>
+                        <td><div class="cm-cell bg-fp"><span class="cm-label">Falso Positivo</span>{fp:,}</div></td>
+                    </tr>
+                    <tr>
+                        <th>Real: SIM (1)</th>
+                        <td><div class="cm-cell bg-fn"><span class="cm-label">Falso Negativo</span>{fn:,}</div></td>
+                        <td><div class="cm-cell bg-tp"><span class="cm-label">Verdadeiro Positivo</span>{tp:,}</div></td>
+                    </tr>
+                </table>
+            </div>
+            """
+            st.markdown(html_cm, unsafe_allow_html=True)
+            
+            with st.expander("Ver Relatório Completo de Classificação"):
                 df_rep = pd.DataFrame(rep).transpose()
                 st.dataframe(df_rep.style.format(precision=3), use_container_width=True)
 
-# ==================== ABA 2: MATRIZ DE CORRELACAO ====================
+# ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
 with tab_corr:
-    st.subheader(f"Matriz de Correlacao Multivariada - {selected_theme}")
-    st.caption("Correlacao linear de Pearson (triangulo inferior). Exclusao da metade superior simetrica para melhor visualizacao.")
+    st.subheader(f"Matriz de Correlação Multivariada - {selected_theme}")
+    st.caption("Correlação linear de Pearson (triângulo inferior).")
     
     corr_info = theme_metrics.get("full_correlation_matrix")
     if corr_info:
@@ -98,7 +178,6 @@ with tab_corr:
             index=corr_info["index"]
         )
 
-        # Mascara triangular inferior
         mask = np.triu(np.ones_like(df_corr, dtype=bool), k=1)
         df_corr_masked = df_corr.mask(mask)
 
@@ -115,37 +194,27 @@ with tab_corr:
             xaxis=dict(tickangle=-45, tickfont=dict(size=10), side="bottom"),
             yaxis=dict(tickfont=dict(size=10)),
             margin=dict(l=40, r=40, t=30, b=120),
-            coloraxis_colorbar=dict(
-                title="Correlacao",
-                thickness=15,
-                len=0.75
-            )
+            coloraxis_colorbar=dict(title="Correlação", thickness=15, len=0.75)
         )
         
         fig.for_each_annotation(lambda a: a.update(text="") if a.text == "nan" else ())
-        
         st.plotly_chart(fig, use_container_width=True)
 
-        with st.expander("Visualizar Tabela Numerica"):
-            st.dataframe(
-                df_corr.style.format(precision=2),
-                use_container_width=True
-            )
     else:
-        st.warning("Matriz de correlacao nao encontrada no arquivo metrics.json.")
+        st.warning("Matriz de correlação não encontrada.")
 
 # ==================== ABA 3: SIMULADOR E CASOS REAIS ====================
 with tab_sim:
-    st.subheader("Simulacao de Risco e Teste Manual em Casos Reais")
+    st.subheader("Simulação de Risco e Teste Manual em Casos Reais")
     
     samples_list = samples_data.get(selected_theme, [])
     sample_options = ["Modo Manual (Preenchimento Livre)"] + [
-        f"Caso Real #{i+1} (Desfecho Real: {'Sim (1)' if s['target_real'] == 1 else 'Nao (0)'} | Idade: {int(s['idade_paciente'])} anos | {s['uf_ocorrencia']})"
+        f"Caso Real #{i+1} (Desfecho Real: {'Sim (1)' if s['target_real'] == 1 else 'Não (0)'} | Idade: {int(s['idade_paciente'])} anos | {s['uf_ocorrencia']})"
         for i, s in enumerate(samples_list)
     ]
     
     selected_sample_idx = st.selectbox(
-        "Carregue uma ocorrencia real do conjunto de teste ou selecione preenchimento livre:",
+        "Carregue uma ocorrência real do conjunto de teste ou selecione preenchimento livre:",
         options=range(len(sample_options)),
         format_func=lambda x: sample_options[x]
     )
@@ -165,57 +234,57 @@ with tab_sim:
     c1, c2, c3 = st.columns(3)
     
     with c1:
-        st.markdown("**Perfil da Vitima**")
+        st.markdown("**Perfil da Vítima**")
         idade = st.number_input("Idade", 14, 105, int(get_val("idade_paciente", 28)))
-        gestante = st.selectbox("Gestante?", [0, 1], index=int(get_val("gestante", 0)), format_func=lambda x: "Sim" if x == 1 else "Nao")
+        gestante = st.selectbox("Gestante?", [0, 1], index=int(get_val("gestante", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
         
         raca_opts = ["1", "2", "3", "4", "5", "ignorado"]
         cur_raca = str(get_val("raca_paciente", "1"))
         raca_idx = raca_opts.index(cur_raca) if cur_raca in raca_opts else 0
-        raca = st.selectbox("Raca/Cor", raca_opts, index=raca_idx, format_func=lambda x: {"1": "Branca", "2": "Preta", "3": "Amarela", "4": "Parda", "5": "Indigena"}.get(x, "Ignorado"))
+        raca = st.selectbox("Raça/Cor", raca_opts, index=raca_idx, format_func=lambda x: {"1": "Branca", "2": "Preta", "3": "Amarela", "4": "Parda", "5": "Indígena"}.get(x, "Ignorado"))
         
         esc_opts = ["1", "2", "3", "4", "5", "6", "ignorado"]
         cur_esc = str(get_val("escolaridade_paciente", "4"))
         esc_idx = esc_opts.index(cur_esc) if cur_esc in esc_opts else 0
-        escolaridade = st.selectbox("Escolaridade", esc_opts, index=esc_idx, format_func=lambda x: {"1": "Fund. Incompleto", "2": "Fund. Completo", "3": "Medio Incompleto", "4": "Medio Completo", "5": "Superior Incompleto", "6": "Superior Completo"}.get(x, "Ignorado"))
+        escolaridade = st.selectbox("Escolaridade", esc_opts, index=esc_idx, format_func=lambda x: {"1": "Fund. Incompleto", "2": "Fund. Completo", "3": "Médio Incompleto", "4": "Médio Completo", "5": "Superior Incompleto", "6": "Superior Completo"}.get(x, "Ignorado"))
         
         civ_opts = ["1", "2", "3", "4", "ignorado"]
         cur_civ = str(get_val("estado_civil_paciente", "1"))
         civ_idx = civ_opts.index(cur_civ) if cur_civ in civ_opts else 0
-        estado_civil = st.selectbox("Estado Civil", civ_opts, index=civ_idx, format_func=lambda x: {"1": "Solteira", "2": "Casada/Uniao", "3": "Viuva", "4": "Separada"}.get(x, "Ignorado"))
+        estado_civil = st.selectbox("Estado Civil", civ_opts, index=civ_idx, format_func=lambda x: {"1": "Solteira", "2": "Casada/União", "3": "Viúva", "4": "Separada"}.get(x, "Ignorado"))
         
-        deficiencia = st.selectbox("Possui Deficiencia?", [0, 1], index=int(get_val("possui_deficiencia", 0)), format_func=lambda x: "Sim" if x == 1 else "Nao")
+        deficiencia = st.selectbox("Possui Deficiência?", [0, 1], index=int(get_val("possui_deficiencia", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
         
     with c2:
-        st.markdown("**Circunstancias da Ocorrencia**")
+        st.markdown("**Circunstâncias da Ocorrência**")
         uf_opts = ["SP", "RJ", "MG", "BA", "RS", "PR", "PE", "CE", "PA", "SC", "GO", "MA", "PB", "ES", "AM", "RN", "AL", "PI", "MT", "DF", "MS", "SE", "RO", "TO", "AC", "AP", "RR"]
         cur_uf = str(get_val("uf_ocorrencia", "SP"))
         uf_idx = uf_opts.index(cur_uf) if cur_uf in uf_opts else 0
         uf = st.selectbox("UF", uf_opts, index=uf_idx)
         
-        dia_semana = st.selectbox("Dia da Semana", [1, 2, 3, 4, 5, 6, 7], index=int(get_val("dia_semana_ocorrencia", 1)) - 1, format_func=lambda x: {1: "Dom", 2: "Seg", 3: "Ter", 4: "Qua", 5: "Qui", 6: "Sex", 7: "Sab"}[x])
-        noite = st.selectbox("Periodo Noturno (18h-06h)?", [0, 1], index=int(get_val("ocorreu_noite_madrugada", 0)), format_func=lambda x: "Sim" if x == 1 else "Nao")
-        mesmo_mun = st.selectbox("Reside no mesmo municipio?", [1, 0], index=0 if get_val("reside_municipio_ocorrencia", 1) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Nao")
-        casa = st.selectbox("Ocorreu na Residencia?", [1, 0], index=0 if get_val("local_residencia", 1) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Nao")
-        num_env = st.number_input("N de Agressores", 1, 10, int(get_val("numero_envolvidos", 1)))
+        dia_semana = st.selectbox("Dia da Semana", [1, 2, 3, 4, 5, 6, 7], index=int(get_val("dia_semana_ocorrencia", 1)) - 1, format_func=lambda x: {1: "Dom", 2: "Seg", 3: "Ter", 4: "Qua", 5: "Qui", 6: "Sex", 7: "Sáb"}[x])
+        noite = st.selectbox("Período Noturno (18h-06h)?", [0, 1], index=int(get_val("ocorreu_noite_madrugada", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
+        mesmo_mun = st.selectbox("Reside no mesmo município?", [1, 0], index=0 if get_val("reside_municipio_ocorrencia", 1) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não")
+        casa = st.selectbox("Ocorreu na Residência?", [1, 0], index=0 if get_val("local_residencia", 1) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não")
+        num_env = st.number_input("Nº de Agressores", 1, 10, int(get_val("numero_envolvidos", 1)))
         
         sex_opts = ["M", "F", "Ambos", "ignorado"]
         cur_sex = str(get_val("autor_sexo", "M"))
         sex_idx = sex_opts.index(cur_sex) if cur_sex in sex_opts else 0
         autor_sexo = st.selectbox("Sexo do Agressor", sex_opts, index=sex_idx)
         
-        alcool = st.selectbox("Suspeita de Uso de Alcool?", [0, 1], index=int(get_val("autor_alcoolizado", 0)), format_func=lambda x: "Sim" if x == 1 else "Nao")
+        alcool = st.selectbox("Suspeita de Uso de Álcool?", [0, 1], index=int(get_val("autor_alcoolizado", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
         
     with c3:
         st.markdown("**Tipologia e Meios Empregados**")
-        v_fisica = st.checkbox("Violencia Fisica", bool(get_val("violencia_fisica", True)))
-        v_psico = st.checkbox("Violencia Psicologica", bool(get_val("violencia_psicologica", True)))
-        v_sexual = st.checkbox("Violencia Sexual", bool(get_val("violencia_sexual", False)))
-        v_financ = st.checkbox("Violencia Financeira", bool(get_val("violencia_financeira", False)))
-        v_neglig = st.checkbox("Negligencia / Abandono", bool(get_val("violencia_negligencia", False)))
+        v_fisica = st.checkbox("Violência Física", bool(get_val("violencia_fisica", True)))
+        v_psico = st.checkbox("Violência Psicológica", bool(get_val("violencia_psicologica", True)))
+        v_sexual = st.checkbox("Violência Sexual", bool(get_val("violencia_sexual", False)))
+        v_financ = st.checkbox("Violência Financeira", bool(get_val("violencia_financeira", False)))
+        v_neglig = st.checkbox("Negligência / Abandono", bool(get_val("violencia_negligencia", False)))
         v_tortura = st.checkbox("Tortura", bool(get_val("violencia_tortura", False)))
-        m_forca = st.checkbox("Forca Corporal / Espancamento", bool(get_val("meio_forca_corporal", True)))
-        m_ameaca = st.checkbox("Ameaca Verbal", bool(get_val("meio_ameaca", True)))
+        m_forca = st.checkbox("Força Corporal / Espancamento", bool(get_val("meio_forca_corporal", True)))
+        m_ameaca = st.checkbox("Ameaça Verbal", bool(get_val("meio_ameaca", True)))
         m_perfurante = st.checkbox("Objeto Perfurante / Faca", bool(get_val("meio_objeto_perfurante", False)))
         m_contundente = st.checkbox("Objeto Contundente", bool(get_val("meio_objeto_contundente", False)))
         m_enforcamento = st.checkbox("Enforcamento / Estrangulamento", bool(get_val("meio_enforcamento", False)))
@@ -233,7 +302,7 @@ with tab_sim:
         "meio_arma_fogo": int(m_arma), "meio_ameaca": int(m_ameaca), "autor_alcoolizado": alcool
     }])
 
-    if st.button("Executar Inferencia", type="primary", use_container_width=True):
+    if st.button("Executar Inferência", type="primary", use_container_width=True):
         prob = active_model.predict_proba(input_df)[0][1]
         pred_label = 1 if prob >= 0.5 else 0
         
@@ -248,9 +317,9 @@ with tab_sim:
             )
         with rc2:
             if pred_label == 1:
-                st.error(f"Alerta: Padrao estatistico compativel com {selected_theme}.")
+                st.error(f"Alerta: Padrão estatístico compatível com {selected_theme}.")
             else:
-                st.success(f"Classificacao abaixo do limiar critico para {selected_theme}.")
+                st.success(f"Classificação abaixo do limiar crítico para {selected_theme}.")
                 
         with rc3:
             if is_sample:
@@ -259,14 +328,14 @@ with tab_sim:
                 st.metric(
                     label="Desfecho Real do Caso",
                     value="Positivo (1)" if real_val == 1 else "Negativo (0)",
-                    delta="Acerto do Modelo" if acertou else "Erro de Classificacao",
+                    delta="Acerto do Modelo" if acertou else "Erro de Classificação",
                     delta_color="normal" if acertou else "inverse"
                 )
 
         if m_arma or m_enforcamento:
             st.warning(
-                "Alerta de Risco Critico de Letalidade (Mitigacao do Vies do Sobrevivente): "
-                "O emprego de arma de fogo ou asfixia/estrangulamento e catalogado no Danger Assessment "
-                "e no FONAR/CNJ como o maior preditor isolado de feminicidio. Em bases hospitalares como o SINAN, a letalidade imediata "
-                "tende a truncar o historico ambulatorial, gerando uma probabilidade estatistica de reincidencia contraintuitivamente menor."
+                "Alerta de Risco Crítico de Letalidade: "
+                "O emprego de arma de fogo ou asfixia é o maior preditor isolado de feminicídio. "
+                "Em bases hospitalares como o SINAN, a letalidade imediata tende a truncar o histórico ambulatorial, "
+                "gerando uma probabilidade de reincidência contraintuitivamente menor devido ao viés de sobrevivência."
             )
