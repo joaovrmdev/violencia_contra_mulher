@@ -10,65 +10,71 @@ st.set_page_config(
     layout="wide"
 )
 
-# Injeção de CSS e HTML Customizado para Estilização de Dashboard Profissional
+# Injeção de CSS para Dashboard Profissional e Grid de Confusão
 st.markdown("""
 <style>
-    /* Estilização global e dos Cards de Métricas */
+    /* Estilização global e dos Cards de Métricas Nativos */
     div[data-testid="stMetric"] {
         background-color: #ffffff;
-        border: 1px solid #e6e6e6;
-        border-left: 4px solid #ff4b4b;
-        padding: 10px 20px;
-        border-radius: 6px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+        border: 1px solid #e9ecef;
+        border-left: 4px solid #495057;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         margin-bottom: 10px;
     }
     
-    /* Estilização da Matriz de Confusão Customizada */
-    .cm-wrapper {
-        margin-top: 15px;
-        margin-bottom: 25px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* Grid Moderno para a Matriz de Confusão */
+    .cm-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+        margin-top: 10px;
+        margin-bottom: 30px;
+        font-family: 'Segoe UI', system-ui, sans-serif;
     }
-    .cm-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 6px;
-        text-align: center;
+    
+    .cm-card {
+        padding: 20px 25px;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
     }
-    .cm-table th {
-        background-color: #f8f9fa;
-        color: #495057;
-        font-size: 0.9em;
-        font-weight: 600;
-        padding: 10px;
-        border-radius: 4px;
-        border: 1px solid #e9ecef;
-    }
-    .cm-cell {
-        padding: 15px;
-        border-radius: 6px;
-        font-size: 1.4em;
-        font-weight: 700;
+    
+    .cm-info {
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     }
-    .cm-label {
-        font-size: 0.55em;
-        font-weight: 600;
+    
+    .cm-title {
+        font-size: 0.85em;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 4px;
-        opacity: 0.8;
     }
     
-    /* Cores Semânticas da Matriz */
-    .bg-tn { background-color: #f8f9fa; border: 1px solid #dee2e6; color: #495057; }
-    .bg-tp { background-color: #ebfbee; border: 1px solid #b2f2bb; color: #2b8a3e; }
-    .bg-fp { background-color: #fff5f5; border: 1px solid #ffc9c9; color: #c92a2a; }
-    .bg-fn { background-color: #fff3cd; border: 1px solid #ffe69c; color: #997404; }
+    .cm-desc {
+        font-size: 0.8em;
+        opacity: 0.75;
+        max-width: 200px;
+        line-height: 1.3;
+    }
+    
+    .cm-value {
+        font-size: 2.2em;
+        font-weight: 800;
+        letter-spacing: -1px;
+    }
+    
+    /* Paleta Semântica Translúcida */
+    .card-tn { background-color: #f8f9fa; color: #343a40; border-left: 5px solid #adb5bd; border-top: 1px solid #e9ecef; border-right: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; }
+    .card-fp { background-color: #fff5f5; color: #c92a2a; border-left: 5px solid #ff8787; border-top: 1px solid #ffe3e3; border-right: 1px solid #ffe3e3; border-bottom: 1px solid #ffe3e3; }
+    .card-fn { background-color: #fff9db; color: #b08d00; border-left: 5px solid #fcc419; border-top: 1px solid #ffec99; border-right: 1px solid #ffec99; border-bottom: 1px solid #ffec99; }
+    .card-tp { background-color: #f4fce3; color: #2b8a3e; border-left: 5px solid #69db7c; border-top: 1px solid #d8f5a2; border-right: 1px solid #d8f5a2; border-bottom: 1px solid #d8f5a2; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,12 +114,12 @@ model_key = f"{selected_theme} - {selected_algo}"
 active_model = models[model_key]
 
 st.title("Avaliação e Inferência - Violência contra a Mulher")
-st.markdown("Modelos supervisionados de triagem e risco com base nos microdados do SINAN/DATASUS.")
+st.markdown("Plataforma de modelagem supervisionada de triagem e risco (Dados SINAN/DATASUS).")
 
 tab_eval, tab_corr, tab_sim = st.tabs([
     "Desempenho dos Modelos",
     "Matriz de Correlação",
-    "Simulador e Casos"
+    "Simulador e Casos de Teste"
 ])
 
 # ==================== ABA 1: COMPARAÇÃO DOS MODELOS ====================
@@ -138,25 +144,40 @@ with tab_eval:
             tn, fp = m_data["confusion_matrix"][0]
             fn, tp = m_data["confusion_matrix"][1]
             
+            # Matriz de Confusão Redesenhada em Grid Card 2x2
             html_cm = f"""
-            <div class="cm-wrapper">
-                <table class="cm-table">
-                    <tr>
-                        <th></th>
-                        <th>Previsto: NÃO (0)</th>
-                        <th>Previsto: SIM (1)</th>
-                    </tr>
-                    <tr>
-                        <th>Real: NÃO (0)</th>
-                        <td><div class="cm-cell bg-tn"><span class="cm-label">Verdadeiro Negativo</span>{tn:,}</div></td>
-                        <td><div class="cm-cell bg-fp"><span class="cm-label">Falso Positivo</span>{fp:,}</div></td>
-                    </tr>
-                    <tr>
-                        <th>Real: SIM (1)</th>
-                        <td><div class="cm-cell bg-fn"><span class="cm-label">Falso Negativo</span>{fn:,}</div></td>
-                        <td><div class="cm-cell bg-tp"><span class="cm-label">Verdadeiro Positivo</span>{tp:,}</div></td>
-                    </tr>
-                </table>
+            <div class="cm-grid">
+                <div class="cm-card card-tn">
+                    <div class="cm-info">
+                        <span class="cm-title">Verdadeiro Negativo</span>
+                        <span class="cm-desc">Modelo previu negativo e acertou.</span>
+                    </div>
+                    <div class="cm-value">{tn:,}</div>
+                </div>
+                
+                <div class="cm-card card-fp">
+                    <div class="cm-info">
+                        <span class="cm-title">Falso Positivo</span>
+                        <span class="cm-desc">Erro: Modelo acusou risco inexistente (Alarme Falso).</span>
+                    </div>
+                    <div class="cm-value">{fp:,}</div>
+                </div>
+                
+                <div class="cm-card card-fn">
+                    <div class="cm-info">
+                        <span class="cm-title">Falso Negativo</span>
+                        <span class="cm-desc">Erro Crítico: Modelo falhou em detectar o risco real.</span>
+                    </div>
+                    <div class="cm-value">{fn:,}</div>
+                </div>
+                
+                <div class="cm-card card-tp">
+                    <div class="cm-info">
+                        <span class="cm-title">Verdadeiro Positivo</span>
+                        <span class="cm-desc">Modelo detectou o risco existente e acertou.</span>
+                    </div>
+                    <div class="cm-value">{tp:,}</div>
+                </div>
             </div>
             """
             st.markdown(html_cm, unsafe_allow_html=True)
@@ -168,7 +189,7 @@ with tab_eval:
 # ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
 with tab_corr:
     st.subheader(f"Matriz de Correlação Multivariada - {selected_theme}")
-    st.caption("Correlação linear de Pearson (triângulo inferior).")
+    st.caption("Correlação linear de Pearson (triângulo inferior). Omissão da metade simétrica para foco analítico.")
     
     corr_info = theme_metrics.get("full_correlation_matrix")
     if corr_info:
@@ -201,11 +222,11 @@ with tab_corr:
         st.plotly_chart(fig, use_container_width=True)
 
     else:
-        st.warning("Matriz de correlação não encontrada.")
+        st.warning("Matriz de correlação não encontrada no arquivo metrics.json.")
 
 # ==================== ABA 3: SIMULADOR E CASOS REAIS ====================
 with tab_sim:
-    st.subheader("Simulação de Risco e Teste Manual em Casos Reais")
+    st.subheader("Simulação de Risco e Inserção de Casos Reais")
     
     samples_list = samples_data.get(selected_theme, [])
     sample_options = ["Modo Manual (Preenchimento Livre)"] + [
@@ -214,7 +235,7 @@ with tab_sim:
     ]
     
     selected_sample_idx = st.selectbox(
-        "Carregue uma ocorrência real do conjunto de teste ou selecione preenchimento livre:",
+        "Carregue uma ocorrência real do conjunto de teste ou mantenha em preenchimento livre:",
         options=range(len(sample_options)),
         format_func=lambda x: sample_options[x]
     )
@@ -266,7 +287,7 @@ with tab_sim:
         noite = st.selectbox("Período Noturno (18h-06h)?", [0, 1], index=int(get_val("ocorreu_noite_madrugada", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
         mesmo_mun = st.selectbox("Reside no mesmo município?", [1, 0], index=0 if get_val("reside_municipio_ocorrencia", 1) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não")
         casa = st.selectbox("Ocorreu na Residência?", [1, 0], index=0 if get_val("local_residencia", 1) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não")
-        num_env = st.number_input("Nº de Agressores", 1, 10, int(get_val("numero_envolvidos", 1)))
+        num_env = st.number_input("Número de Agressores", 1, 10, int(get_val("numero_envolvidos", 1)))
         
         sex_opts = ["M", "F", "Ambos", "ignorado"]
         cur_sex = str(get_val("autor_sexo", "M"))
@@ -334,7 +355,7 @@ with tab_sim:
 
         if m_arma or m_enforcamento:
             st.warning(
-                "Alerta de Risco Crítico de Letalidade: "
+                "Atenção - Risco Crítico de Letalidade: "
                 "O emprego de arma de fogo ou asfixia é o maior preditor isolado de feminicídio. "
                 "Em bases hospitalares como o SINAN, a letalidade imediata tende a truncar o histórico ambulatorial, "
                 "gerando uma probabilidade de reincidência contraintuitivamente menor devido ao viés de sobrevivência."
