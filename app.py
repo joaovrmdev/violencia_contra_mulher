@@ -144,43 +144,29 @@ with tab_eval:
             tn, fp = m_data["confusion_matrix"][0]
             fn, tp = m_data["confusion_matrix"][1]
             
-            # Matriz de Confusão Redesenhada em Grid Card 2x2
+           # Matriz de Confusão Redesenhada em Grid Card 2x2 (HTML compactado)
             html_cm = f"""
             <div class="cm-grid">
                 <div class="cm-card card-tn">
-                    <div class="cm-info">
-                        <span class="cm-title">Verdadeiro Negativo</span>
-                        <span class="cm-desc">Modelo previu negativo e acertou.</span>
-                    </div>
+                    <div class="cm-info"><span class="cm-title">Verdadeiro Negativo</span><span class="cm-desc">Modelo previu negativo e acertou.</span></div>
                     <div class="cm-value">{tn:,}</div>
                 </div>
-                
                 <div class="cm-card card-fp">
-                    <div class="cm-info">
-                        <span class="cm-title">Falso Positivo</span>
-                        <span class="cm-desc">Erro: Modelo acusou risco inexistente (Alarme Falso).</span>
-                    </div>
+                    <div class="cm-info"><span class="cm-title">Falso Positivo</span><span class="cm-desc">Erro: Modelo acusou risco inexistente (Alarme Falso).</span></div>
                     <div class="cm-value">{fp:,}</div>
                 </div>
-                
                 <div class="cm-card card-fn">
-                    <div class="cm-info">
-                        <span class="cm-title">Falso Negativo</span>
-                        <span class="cm-desc">Erro Crítico: Modelo falhou em detectar o risco real.</span>
-                    </div>
+                    <div class="cm-info"><span class="cm-title">Falso Negativo</span><span class="cm-desc">Erro Crítico: Modelo falhou em detectar o risco real.</span></div>
                     <div class="cm-value">{fn:,}</div>
                 </div>
-                
                 <div class="cm-card card-tp">
-                    <div class="cm-info">
-                        <span class="cm-title">Verdadeiro Positivo</span>
-                        <span class="cm-desc">Modelo detectou o risco existente e acertou.</span>
-                    </div>
+                    <div class="cm-info"><span class="cm-title">Verdadeiro Positivo</span><span class="cm-desc">Modelo detectou o risco existente e acertou.</span></div>
                     <div class="cm-value">{tp:,}</div>
                 </div>
             </div>
             """
             st.markdown(html_cm, unsafe_allow_html=True)
+
             
             with st.expander("Ver Relatório Completo de Classificação"):
                 df_rep = pd.DataFrame(rep).transpose()
