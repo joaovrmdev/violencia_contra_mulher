@@ -22,9 +22,9 @@ def load_assets():
     models = {}
     for label, data in metrics.items():
         slug = data["slug"]
-        models[f"{label} - Regressao Logistica"] = joblib.load(f"model_{slug}_lr.joblib")
-        models[f"{label} - Arvores de Decisao (GBDT)"] = joblib.load(f"model_{slug}_tree.joblib")
-        
+        models[f"{label} - Regressão Logística"] = joblib.load(f"model_{slug}_lr.joblib")
+        models[f"{label} - Árvores de Decisão (GBDT)"] = joblib.load(f"model_{slug}_tree.joblib")
+    
     return models, metrics, samples
 
 try:
@@ -41,7 +41,7 @@ theme_metrics = metrics_data[selected_theme]
 
 selected_algo = st.sidebar.radio(
     "Familia de Algoritmo:",
-    ["Arvores de Decisao (GBDT)", "Regressao Logistica"]
+    ["Árvores de Decisão (GBDT)", "Regressão Logística"]
 )
 
 model_key = f"{selected_theme} - {selected_algo}"
@@ -62,7 +62,7 @@ with tab_eval:
     st.caption(f"Amostragem: {theme_metrics['n_train']:,} registros no treino (80%) | {theme_metrics['n_test']:,} registros no teste (20% nao vistos)")
     
     comp_col1, comp_col2 = st.columns(2)
-    for col, algo_name in zip([comp_col1, comp_col2], ["Arvores de Decisao (GBDT)", "Regressao Logistica"]):
+    for col, algo_name in zip([comp_col1, comp_col2], ["Árvores de Decisão (GBDT)", "Regressão Logística"]):
         with col:
             st.markdown(f"### {algo_name}")
             m_data = theme_metrics[algo_name]
