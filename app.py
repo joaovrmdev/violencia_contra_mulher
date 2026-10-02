@@ -8,6 +8,7 @@ import plotly.express as px
 
 st.set_page_config(
     page_title="ML - Violencia contra a Mulher (SINAN)",
+    page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Feminism_symbol.svg/512px-Feminism_symbol.svg.png",
     layout="wide"
 )
 
