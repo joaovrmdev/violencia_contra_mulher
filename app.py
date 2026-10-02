@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Injeção de CSS para Dashboard Profissional e Grid de Confusão
+# Injeção de CSS para Dashboard Profissional, Grid de Confusão e Cards de Notificação
 st.markdown("""
 <style>
     /* Estilização global e dos Cards de Métricas Nativos */
@@ -87,11 +87,61 @@ st.markdown("""
         text-align: right;
     }
     
-    /* Paleta Executiva: Cores apenas nos títulos */
+    /* Paleta Executiva */
     .card-tn .cm-title { color: #6c757d; }
     .card-fp .cm-title { color: #a56a6a; }
     .card-fn .cm-title { color: #a68a56; }
     .card-tp .cm-title { color: #5f8270; }
+
+    /* Cards de Notificação / Estado da Simulação */
+    .status-card {
+        background-color: #ffffff;
+        border: 1px solid #f1f3f5;
+        border-radius: 12px;
+        padding: 18px 24px;
+        margin-top: 15px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .status-sample {
+        border-left: 5px solid #1a73e8;
+    }
+    .status-sample .status-title {
+        color: #1a73e8;
+        font-size: 0.85em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .status-warning {
+        border-left: 5px solid #a68a56;
+    }
+    .status-warning .status-title {
+        color: #a68a56;
+        font-size: 0.85em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .status-manual {
+        border-left: 5px solid #868e96;
+    }
+    .status-manual .status-title {
+        color: #6c757d;
+        font-size: 0.85em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .status-desc {
+        color: #495057;
+        font-size: 0.88em;
+        line-height: 1.5;
+    }
 
     @media (max-width: 360px) {
         .cm-card {
@@ -356,139 +406,185 @@ with tab_corr:
 # ==================== ABA 3: SIMULADOR E CASOS REAIS ====================
 with tab_sim:
     st.subheader("Simulação de Risco e Inserção de Casos Reais")
-    
+
+    # Funções de higienização para evitar divergências falsas de tipo
+    def norm_num(v, default=0):
+        if v is None or pd.isna(v):
+            return default
+        try:
+            return int(round(float(v)))
+        except (ValueError, TypeError):
+            return default
+
+    def norm_code(v, default="ignorado"):
+        if v is None or pd.isna(v):
+            return default
+        s = str(v).strip()
+        if s.endswith(".0"):
+            s = s[:-2]
+        return s
+
+    def map_raca(val):
+        c = norm_code(val, "ignorado")
+        return c if c in ["1", "2", "3", "4", "5"] else "ignorado"
+
+    def map_esc(val):
+        c = norm_code(val, "ignorado")
+        return c if c in ["1", "2", "3", "4", "5", "6"] else "ignorado"
+
+    def map_civ(val):
+        c = norm_code(val, "ignorado")
+        return c if c in ["1", "2", "3", "4"] else "ignorado"
+
+    def map_sex(val):
+        s = norm_code(val, "ignorado").upper()
+        if s in ["M", "1"]: return "M"
+        if s in ["F", "2"]: return "F"
+        if s in ["AMBOS", "3"]: return "Ambos"
+        return "ignorado"
+
     samples_list = samples_data.get(selected_theme, [])
     sample_options = ["Modo Manual (Preenchimento Livre)"] + [
-        f"Caso Real #{i+1} (Desfecho Real: {'Sim (1)' if s['target_real'] == 1 else 'Não (0)'} | Idade: {int(s['idade_paciente'])} anos | {s['uf_ocorrencia']})"
+        f"Caso Real #{i+1} (Desfecho Real: {'Sim (1)' if s['target_real'] == 1 else 'Não (0)'} | Idade: {norm_num(s.get('idade_paciente', 28))} anos | {norm_code(s.get('uf_ocorrencia', 'SP'))})"
         for i, s in enumerate(samples_list)
     ]
     
-    col_sel1, col_sel2 = st.columns([3, 1])
-    with col_sel1:
-        selected_sample_idx = st.selectbox(
-            "Carregue uma ocorrência real do conjunto de teste ou mantenha em preenchimento livre:",
-            options=range(len(sample_options)),
-            format_func=lambda x: sample_options[x]
-        )
+    selected_sample_idx = st.selectbox(
+        "Carregue uma ocorrência real do conjunto de teste ou mantenha em preenchimento livre:",
+        options=range(len(sample_options)),
+        format_func=lambda x: sample_options[x],
+        key="selector_caso_teste"
+    )
     
     is_sample = selected_sample_idx > 0
     sample_val = samples_list[selected_sample_idx - 1] if is_sample else None
 
-    # Trava de edição ativa por padrão quando um caso real está selecionado
-    bloquear_edicao = False
-    if is_sample:
-        with col_sel2:
-            st.write("")
-            st.write("")
-            bloquear_edicao = st.checkbox("Bloquear campos", value=True, help="Impede modificações acidentais no caso real.")
-
+    # Função para extrair dados padronizados do caso
     def get_val(key, default):
         if is_sample and key in sample_val:
             return sample_val[key]
         return default
 
+    # Formulário de Entradas
     c1, c2, c3 = st.columns(3)
     
     with c1:
         st.markdown("**Perfil da Vítima**")
-        idade = st.number_input("Idade", 14, 105, int(get_val("idade_paciente", 28)), disabled=bloquear_edicao)
-        gestante = st.selectbox("Gestante?", [0, 1], index=int(get_val("gestante", 0)), format_func=lambda x: "Sim" if x == 1 else "Não", disabled=bloquear_edicao)
+        idade = st.number_input("Idade", 14, 105, norm_num(get_val("idade_paciente", 28)))
+        gestante = st.selectbox("Gestante?", [0, 1], index=norm_num(get_val("gestante", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
         
         raca_opts = ["1", "2", "3", "4", "5", "ignorado"]
-        cur_raca = str(get_val("raca_paciente", "1"))
-        raca_idx = raca_opts.index(cur_raca) if cur_raca in raca_opts else 0
-        raca = st.selectbox("Raça/Cor", raca_opts, index=raca_idx, format_func=lambda x: {"1": "Branca", "2": "Preta", "3": "Amarela", "4": "Parda", "5": "Indígena"}.get(x, "Ignorado"), disabled=bloquear_edicao)
+        cur_raca = map_raca(get_val("raca_paciente", "1"))
+        raca = st.selectbox("Raça/Cor", raca_opts, index=raca_opts.index(cur_raca), format_func=lambda x: {"1": "Branca", "2": "Preta", "3": "Amarela", "4": "Parda", "5": "Indígena"}.get(x, "Ignorado"))
         
         esc_opts = ["1", "2", "3", "4", "5", "6", "ignorado"]
-        cur_esc = str(get_val("escolaridade_paciente", "4"))
-        esc_idx = esc_opts.index(cur_esc) if cur_esc in esc_opts else 0
-        escolaridade = st.selectbox("Escolaridade", esc_opts, index=esc_idx, format_func=lambda x: {"1": "Fund. Incompleto", "2": "Fund. Completo", "3": "Médio Incompleto", "4": "Médio Completo", "5": "Superior Incompleto", "6": "Superior Completo"}.get(x, "Ignorado"), disabled=bloquear_edicao)
+        cur_esc = map_esc(get_val("escolaridade_paciente", "4"))
+        escolaridade = st.selectbox("Escolaridade", esc_opts, index=esc_opts.index(cur_esc), format_func=lambda x: {"1": "Fund. Incompleto", "2": "Fund. Completo", "3": "Médio Incompleto", "4": "Médio Completo", "5": "Superior Incompleto", "6": "Superior Completo"}.get(x, "Ignorado"))
         
         civ_opts = ["1", "2", "3", "4", "ignorado"]
-        cur_civ = str(get_val("estado_civil_paciente", "1"))
-        civ_idx = civ_opts.index(cur_civ) if cur_civ in civ_opts else 0
-        estado_civil = st.selectbox("Estado Civil", civ_opts, index=civ_idx, format_func=lambda x: {"1": "Solteira", "2": "Casada/União", "3": "Viúva", "4": "Separada"}.get(x, "Ignorado"), disabled=bloquear_edicao)
+        cur_civ = map_civ(get_val("estado_civil_paciente", "1"))
+        estado_civil = st.selectbox("Estado Civil", civ_opts, index=civ_opts.index(cur_civ), format_func=lambda x: {"1": "Solteira", "2": "Casada/União", "3": "Viúva", "4": "Separada"}.get(x, "Ignorado"))
         
-        deficiencia = st.selectbox("Possui Deficiência?", [0, 1], index=int(get_val("possui_deficiencia", 0)), format_func=lambda x: "Sim" if x == 1 else "Não", disabled=bloquear_edicao)
+        deficiencia = st.selectbox("Possui Deficiência?", [0, 1], index=norm_num(get_val("possui_deficiencia", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
         
     with c2:
         st.markdown("**Circunstâncias da Ocorrência**")
         uf_opts = ["SP", "RJ", "MG", "BA", "RS", "PR", "PE", "CE", "PA", "SC", "GO", "MA", "PB", "ES", "AM", "RN", "AL", "PI", "MT", "DF", "MS", "SE", "RO", "TO", "AC", "AP", "RR"]
-        cur_uf = str(get_val("uf_ocorrencia", "SP"))
+        cur_uf = norm_code(get_val("uf_ocorrencia", "SP")).upper()
         uf_idx = uf_opts.index(cur_uf) if cur_uf in uf_opts else 0
-        uf = st.selectbox("UF", uf_opts, index=uf_idx, disabled=bloquear_edicao)
+        uf = st.selectbox("UF", uf_opts, index=uf_idx)
         
-        dia_semana = st.selectbox("Dia da Semana", [1, 2, 3, 4, 5, 6, 7], index=int(get_val("dia_semana_ocorrencia", 1)) - 1, format_func=lambda x: {1: "Dom", 2: "Seg", 3: "Ter", 4: "Qua", 5: "Qui", 6: "Sex", 7: "Sáb"}[x], disabled=bloquear_edicao)
-        noite = st.selectbox("Período Noturno (18h-06h)?", [0, 1], index=int(get_val("ocorreu_noite_madrugada", 0)), format_func=lambda x: "Sim" if x == 1 else "Não", disabled=bloquear_edicao)
-        mesmo_mun = st.selectbox("Reside no mesmo município?", [1, 0], index=0 if get_val("reside_municipio_ocorrencia", 1) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não", disabled=bloquear_edicao)
-        casa = st.selectbox("Ocorreu na Residência?", [1, 0], index=0 if get_val("local_residencia", 1) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não", disabled=bloquear_edicao)
-        num_env = st.number_input("Número de Agressores", 1, 10, int(get_val("numero_envolvidos", 1)), disabled=bloquear_edicao)
+        dia_val = norm_num(get_val("dia_semana_ocorrencia", 1))
+        dia_idx = max(0, min(6, dia_val - 1))
+        dia_semana = st.selectbox("Dia da Semana", [1, 2, 3, 4, 5, 6, 7], index=dia_idx, format_func=lambda x: {1: "Dom", 2: "Seg", 3: "Ter", 4: "Qua", 5: "Qui", 6: "Sex", 7: "Sáb"}[x])
+        
+        noite = st.selectbox("Período Noturno (18h-06h)?", [0, 1], index=norm_num(get_val("ocorreu_noite_madrugada", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
+        mesmo_mun = st.selectbox("Reside no mesmo município?", [1, 0], index=0 if norm_num(get_val("reside_municipio_ocorrencia", 1)) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não")
+        casa = st.selectbox("Ocorreu na Residência?", [1, 0], index=0 if norm_num(get_val("local_residencia", 1)) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não")
+        num_env = st.number_input("Número de Agressores", 1, 10, max(1, norm_num(get_val("numero_envolvidos", 1))))
         
         sex_opts = ["M", "F", "Ambos", "ignorado"]
-        cur_sex = str(get_val("autor_sexo", "M"))
+        cur_sex = map_sex(get_val("autor_sexo", "M"))
         sex_idx = sex_opts.index(cur_sex) if cur_sex in sex_opts else 0
-        autor_sexo = st.selectbox("Sexo do Agressor", sex_opts, index=sex_idx, disabled=bloquear_edicao)
+        autor_sexo = st.selectbox("Sexo do Agressor", sex_opts, index=sex_idx)
         
-        alcool = st.selectbox("Suspeita de Uso de Álcool?", [0, 1], index=int(get_val("autor_alcoolizado", 0)), format_func=lambda x: "Sim" if x == 1 else "Não", disabled=bloquear_edicao)
+        alcool = st.selectbox("Suspeita de Uso de Álcool?", [0, 1], index=norm_num(get_val("autor_alcoolizado", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
         
     with c3:
         st.markdown("**Tipologia e Meios Empregados**")
-        v_fisica = st.checkbox("Violência Física", bool(get_val("violencia_fisica", True)), disabled=bloquear_edicao)
-        v_psico = st.checkbox("Violência Psicológica", bool(get_val("violencia_psicologica", True)), disabled=bloquear_edicao)
-        v_sexual = st.checkbox("Violência Sexual", bool(get_val("violencia_sexual", False)), disabled=bloquear_edicao)
-        v_financ = st.checkbox("Violência Financeira", bool(get_val("violencia_financeira", False)), disabled=bloquear_edicao)
-        v_neglig = st.checkbox("Negligência / Abandono", bool(get_val("violencia_negligencia", False)), disabled=bloquear_edicao)
-        v_tortura = st.checkbox("Tortura", bool(get_val("violencia_tortura", False)), disabled=bloquear_edicao)
-        m_forca = st.checkbox("Força Corporal / Espancamento", bool(get_val("meio_forca_corporal", True)), disabled=bloquear_edicao)
-        m_ameaca = st.checkbox("Ameaça Verbal", bool(get_val("meio_ameaca", True)), disabled=bloquear_edicao)
-        m_perfurante = st.checkbox("Objeto Perfurante / Faca", bool(get_val("meio_objeto_perfurante", False)), disabled=bloquear_edicao)
-        m_contundente = st.checkbox("Objeto Contundente", bool(get_val("meio_objeto_contundente", False)), disabled=bloquear_edicao)
-        m_enforcamento = st.checkbox("Enforcamento / Estrangulamento", bool(get_val("meio_enforcamento", False)), disabled=bloquear_edicao)
-        m_arma = st.checkbox("Arma de Fogo", bool(get_val("meio_arma_fogo", False)), disabled=bloquear_edicao)
+        v_fisica = st.checkbox("Violência Física", bool(norm_num(get_val("violencia_fisica", 1))))
+        v_psico = st.checkbox("Violência Psicológica", bool(norm_num(get_val("violencia_psicologica", 1))))
+        v_sexual = st.checkbox("Violência Sexual", bool(norm_num(get_val("violencia_sexual", 0))))
+        v_financ = st.checkbox("Violência Financeira", bool(norm_num(get_val("violencia_financeira", 0))))
+        v_neglig = st.checkbox("Negligência / Abandono", bool(norm_num(get_val("violencia_negligencia", 0))))
+        v_tortura = st.checkbox("Tortura", bool(norm_num(get_val("violencia_tortura", 0))))
+        m_forca = st.checkbox("Força Corporal / Espancamento", bool(norm_num(get_val("meio_forca_corporal", 1))))
+        m_ameaca = st.checkbox("Ameaça Verbal", bool(norm_num(get_val("meio_ameaca", 1))))
+        m_perfurante = st.checkbox("Objeto Perfurante / Faca", bool(norm_num(get_val("meio_objeto_perfurante", 0))))
+        m_contundente = st.checkbox("Objeto Contundente", bool(norm_num(get_val("meio_objeto_contundente", 0))))
+        m_enforcamento = st.checkbox("Enforcamento / Estrangulamento", bool(norm_num(get_val("meio_enforcamento", 0))))
+        m_arma = st.checkbox("Arma de Fogo", bool(norm_num(get_val("meio_arma_fogo", 0))))
 
-    # Detecção de divergências em relação aos valores originais do caso real
+    # Conferência precisa de integridade com o caso real
     campos_alterados = []
     if is_sample:
         conferencias = [
-            (int(idade) != int(sample_val.get("idade_paciente", 0)), "Idade"),
-            (int(gestante) != int(sample_val.get("gestante", 0)), "Gestante"),
-            (str(raca) != str(sample_val.get("raca_paciente", "")), "Raça"),
-            (str(escolaridade) != str(sample_val.get("escolaridade_paciente", "")), "Escolaridade"),
-            (str(estado_civil) != str(sample_val.get("estado_civil_paciente", "")), "Estado Civil"),
-            (int(deficiencia) != int(sample_val.get("possui_deficiencia", 0)), "Deficiência"),
-            (str(uf) != str(sample_val.get("uf_ocorrencia", "")), "UF"),
-            (int(dia_semana) != int(sample_val.get("dia_semana_ocorrencia", 0)), "Dia da Semana"),
-            (int(noite) != int(sample_val.get("ocorreu_noite_madrugada", 0)), "Período Noturno"),
-            (int(mesmo_mun) != int(sample_val.get("reside_municipio_ocorrencia", 0)), "Mesmo Município"),
-            (int(casa) != int(sample_val.get("local_residencia", 0)), "Na Residência"),
-            (int(num_env) != int(sample_val.get("numero_envolvidos", 1)), "Nº Agressores"),
-            (str(autor_sexo) != str(sample_val.get("autor_sexo", "")), "Sexo do Autor"),
-            (int(alcool) != int(sample_val.get("autor_alcoolizado", 0)), "Álcool"),
-            (int(v_fisica) != int(sample_val.get("violencia_fisica", 0)), "Violência Física"),
-            (int(v_psico) != int(sample_val.get("violencia_psicologica", 0)), "Violência Psicológica"),
-            (int(v_sexual) != int(sample_val.get("violencia_sexual", 0)), "Violência Sexual"),
-            (int(v_financ) != int(sample_val.get("violencia_financeira", 0)), "Violência Financeira"),
-            (int(v_neglig) != int(sample_val.get("violencia_negligencia", 0)), "Negligência"),
-            (int(v_tortura) != int(sample_val.get("violencia_tortura", 0)), "Tortura"),
-            (int(m_forca) != int(sample_val.get("meio_forca_corporal", 0)), "Força Corporal"),
-            (int(m_ameaca) != int(sample_val.get("meio_ameaca", 0)), "Ameaça"),
-            (int(m_perfurante) != int(sample_val.get("meio_objeto_perfurante", 0)), "Objeto Perfurante"),
-            (int(m_contundente) != int(sample_val.get("meio_objeto_contundente", 0)), "Objeto Contundente"),
-            (int(m_enforcamento) != int(sample_val.get("meio_enforcamento", 0)), "Enforcamento"),
-            (int(m_arma) != int(sample_val.get("meio_arma_fogo", 0)), "Arma de Fogo")
+            (norm_num(idade) != norm_num(sample_val.get("idade_paciente")), "Idade"),
+            (norm_num(gestante) != norm_num(sample_val.get("gestante")), "Gestante"),
+            (map_raca(raca) != map_raca(sample_val.get("raca_paciente")), "Raça"),
+            (map_esc(escolaridade) != map_esc(sample_val.get("escolaridade_paciente")), "Escolaridade"),
+            (map_civ(estado_civil) != map_civ(sample_val.get("estado_civil_paciente")), "Estado Civil"),
+            (norm_num(deficiencia) != norm_num(sample_val.get("possui_deficiencia")), "Deficiência"),
+            (norm_code(uf).upper() != norm_code(sample_val.get("uf_ocorrencia")).upper(), "UF"),
+            (norm_num(dia_semana) != norm_num(sample_val.get("dia_semana_ocorrencia")), "Dia da Semana"),
+            (norm_num(noite) != norm_num(sample_val.get("ocorreu_noite_madrugada")), "Período Noturno"),
+            (norm_num(mesmo_mun) != norm_num(sample_val.get("reside_municipio_ocorrencia")), "Mesmo Município"),
+            (norm_num(casa) != norm_num(sample_val.get("local_residencia")), "Na Residência"),
+            (norm_num(num_env) != norm_num(sample_val.get("numero_envolvidos")), "Nº Agressores"),
+            (map_sex(autor_sexo) != map_sex(sample_val.get("autor_sexo")), "Sexo do Autor"),
+            (norm_num(alcool) != norm_num(sample_val.get("autor_alcoolizado")), "Álcool"),
+            (int(v_fisica) != norm_num(sample_val.get("violencia_fisica")), "Violência Física"),
+            (int(v_psico) != norm_num(sample_val.get("violencia_psicologica")), "Violência Psicológica"),
+            (int(v_sexual) != norm_num(sample_val.get("violencia_sexual")), "Violência Sexual"),
+            (int(v_financ) != norm_num(sample_val.get("violencia_financeira")), "Violência Financeira"),
+            (int(v_neglig) != norm_num(sample_val.get("violencia_negligencia")), "Negligência"),
+            (int(v_tortura) != norm_num(sample_val.get("violencia_tortura")), "Tortura"),
+            (int(m_forca) != norm_num(sample_val.get("meio_forca_corporal")), "Força Corporal"),
+            (int(m_ameaca) != norm_num(sample_val.get("meio_ameaca")), "Ameaça"),
+            (int(m_perfurante) != norm_num(sample_val.get("meio_objeto_perfurante")), "Objeto Perfurante"),
+            (int(m_contundente) != norm_num(sample_val.get("meio_objeto_contundente")), "Objeto Contundente"),
+            (int(m_enforcamento) != norm_num(sample_val.get("meio_enforcamento")), "Enforcamento"),
+            (int(m_arma) != norm_num(sample_val.get("meio_arma_fogo")), "Arma de Fogo")
         ]
         campos_alterados = [label for alterado, label in conferencias if alterado]
 
-    # Feedback dinâmico do estado do formulário
-    if is_sample:
+    # Exibição do Card Informativo / Alerta de Transição
+    if is_sample and len(campos_alterados) == 0:
         desfecho_txt = "POSITIVO (1)" if sample_val["target_real"] == 1 else "NEGATIVO (0)"
-        if len(campos_alterados) == 0:
-            st.info(f"Registro Real Carregado (Fidedigno). Desfecho documentado originalmente na ficha do SINAN: {desfecho_txt}")
-        else:
-            st.warning(
-                f"Modo Customizado Ativo: Você alterou os parâmetros originais deste caso ({', '.join(campos_alterados)}). "
-                f"A verificação contra o desfecho histórico de teste foi desativada para manter a integridade métrica."
-            )
+        st.markdown(f"""
+        <div class="status-card status-sample">
+            <span class="status-title">Caso Real Carregado (Fidedigno)</span>
+            <span class="status-desc">Dados extraídos diretamente do conjunto de teste não visto no treino. Desfecho documentado na ficha do SINAN: <strong>{desfecho_txt}</strong>.</span>
+        </div>
+        """, unsafe_allow_html=True)
+    elif is_sample and len(campos_alterados) > 0:
+        st.markdown(f"""
+        <div class="status-card status-warning">
+            <span class="status-title">Aviso de Transição para Simulação Livre</span>
+            <span class="status-desc">
+                Você modificou parâmetros originais deste registro (<strong>{', '.join(campos_alterados)}</strong>). 
+                Os casos de teste reais existem estritamente para avaliar a precisão do modelo frente ao desfecho documental do SINAN. 
+                Ao prosseguir com a inferência, este cenário será tratado como <strong>Preenchimento Livre</strong> e a auditoria histórica será desativada.
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="status-card status-manual">
+            <span class="status-title">Preenchimento Livre Ativo</span>
+            <span class="status-desc">Modo manual ativo. Ajuste os campos para simular hipóteses e cenários sob medida.</span>
+        </div>
+        """, unsafe_allow_html=True)
 
     input_df = pd.DataFrame([{
         "idade_paciente": idade, "numero_envolvidos": num_env, "dia_semana_ocorrencia": str(dia_semana),
@@ -522,6 +618,7 @@ with tab_sim:
                 st.success(f"Classificação abaixo do limiar crítico para {selected_theme}.")
                 
         with rc3:
+            # A validação histórica só é acionada se o caso real não tiver sido modificado
             if is_sample and len(campos_alterados) == 0:
                 real_val = sample_val["target_real"]
                 acertou = pred_label == real_val
@@ -531,18 +628,11 @@ with tab_sim:
                     delta="Acerto do Modelo" if acertou else "Erro de Classificação",
                     delta_color="normal" if acertou else "inverse"
                 )
-            elif is_sample and len(campos_alterados) > 0:
-                st.metric(
-                    label="Validação Histórica",
-                    value="Suspensa",
-                    delta="Dados Modificados",
-                    delta_color="off"
-                )
             else:
                 st.metric(
                     label="Tipo de Entrada",
                     value="Simulação Livre",
-                    delta="Sem histórico",
+                    delta="Dados Customizados" if is_sample else "Sem Histórico Real",
                     delta_color="off"
                 )
 
