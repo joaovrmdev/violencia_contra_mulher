@@ -203,7 +203,6 @@ with tab_eval:
                 st.dataframe(df_rep.style.format(precision=3), use_container_width=True)
 
 # ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
-# ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
 with tab_corr:
     st.subheader(f"Associações Multivariadas - {selected_theme}")
     st.caption("Correlação de Pearson entre variáveis distintas. A auto-associação diagonal (1.00) foi neutralizada para destacar contrastes reais.")
@@ -291,17 +290,17 @@ with tab_corr:
 
         st.markdown("---")
 
-        # 1. Aplica máscara do triângulo superior
-        mask_upper = np.triu(np.ones_like(df_raw, dtype=bool), k=1)
-        df_masked = df_raw.mask(mask_upper)
+        # 1. Converte para array NumPy editavel do tipo float
+        arr = df_raw.to_numpy(dtype=float, copy=True)
 
-        # 2. Neutraliza a diagonal principal (elimina o 1.00 da coloração)
-        np.fill_diagonal(df_masked.values, np.nan)
+        # 2. Mascara triangular superior + diagonal principal (k=0 pega a diagonal e tudo acima dela)
+        mask_upper_and_diag = np.triu(np.ones_like(arr, dtype=bool), k=0)
+        arr[mask_upper_and_diag] = np.nan
 
-        # Aplica renomeações diferenciadas para os eixos
-        df_plot = df_masked.copy()
-        df_plot.columns = [LABEL_MAP_X.get(col, col) for col in df_plot.columns]
-        df_plot.index = [LABEL_MAP_Y.get(idx, idx) for idx in df_plot.index]
+        # 3. Monta o DataFrame de plotagem com os rotulos formatados
+        cols_x = [LABEL_MAP_X.get(col, col) for col in df_raw.columns]
+        idx_y = [LABEL_MAP_Y.get(idx, idx) for idx in df_raw.index]
+        df_plot = pd.DataFrame(arr, columns=cols_x, index=idx_y)
 
         # Escala monocromática centrada no azul Gemini (#1a73e8)
         # O teto de cor é fixado em 0.65 para que as maiores associações reais atinjam o azul pleno
