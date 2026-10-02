@@ -15,80 +15,96 @@ st.markdown("""
     /* Estilização global e dos Cards de Métricas Nativos */
     div[data-testid="stMetric"] {
         background-color: #ffffff;
-        border: none;
-        padding: 20px 25px;
-        border-radius: 20px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+        border: 1px solid #f1f3f5;
+        padding: 20px 24px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
         margin-bottom: 15px;
-        transition: transform 0.2s ease;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     div[data-testid="stMetric"]:hover {
         transform: translateY(-2px);
-        box-shadow: 0 12px 32px rgba(0,0,0,0.06);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.04);
     }
     
-    /* Grid Moderno para a Matriz de Confusão */
+    /* Grid Responsivo e Fluido para a Matriz de Confusão */
     .cm-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        /* auto-fit e minmax garantem que o grid quebre a linha sozinho se a tela encolher */
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 20px;
         margin-top: 15px;
         margin-bottom: 35px;
-        font-family: 'Segoe UI', system-ui, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     
-    /* Cartões Flutuantes (Fundo Branco, Sombra Suave) */
+    /* Cartões Flutuantes Sóbrios */
     .cm-card {
         background-color: #ffffff;
-        border: none;
-        border-radius: 20px;
-        padding: 25px 30px;
+        border: 1px solid #f8f9fa;
+        border-radius: 12px;
+        padding: 24px;
         display: flex;
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
-        gap: 24px; /* Espaçamento forçado entre o bloco de texto e o número */
-        box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+        flex-wrap: wrap; /* Permite que o conteúdo interno quebre se espremido */
+        gap: 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .cm-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 14px 32px rgba(0,0,0,0.06);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.05);
     }
     
+    /* Bloco de texto flexível */
     .cm-info { 
         display: flex; 
         flex-direction: column; 
+        flex: 1 1 160px; /* Cresce, mas respeita um mínimo antes de forçar o wrap */
     }
     
     .cm-title {
-        font-size: 0.9em;
+        font-size: 0.85em;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
     }
     
     .cm-desc {
-        font-size: 0.85em;
-        color: #adb5bd;
-        max-width: 200px;
+        font-size: 0.8em;
+        color: #868e96;
         line-height: 1.4;
     }
     
+    /* Valores unificados em Grafite Escuro para seriedade */
     .cm-value {
-        font-size: 2.6em;
-        font-weight: 800;
-        letter-spacing: -1px;
-        flex-shrink: 0; /* Impede que o número seja espremido pelo texto longo */
+        font-size: 2.2em;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        color: #212529; 
         text-align: right;
     }
     
-    /* Paleta Pastel Fosca (Menos agressiva aos olhos) */
-    .card-tn .cm-title, .card-tn .cm-value { color: #868e96; } /* Cinza Suave */
-    .card-fp .cm-title, .card-fp .cm-value { color: #e08999; } /* Rosa Queimado / Vermelho Pastel */
-    .card-fn .cm-title, .card-fn .cm-value { color: #d4b46a; } /* Dourado Areia / Amarelo Pastel */
-    .card-tp .cm-title, .card-tp .cm-value { color: #82b092; } /* Verde Sálvia / Verde Pastel */
+    /* Paleta Executiva: Cores apenas nos títulos, com tons fechados e dessaturados */
+    .card-tn .cm-title { color: #6c757d; } /* Cinza Ardósia */
+    .card-fp .cm-title { color: #a56a6a; } /* Terracota Fechado */
+    .card-fn .cm-title { color: #a68a56; } /* Ouro Velho */
+    .card-tp .cm-title { color: #5f8270; } /* Verde Musgo */
+
+    /* Media Query para extrema restrição de espaço (Smartphones ou divisão de tela) */
+    @media (max-width: 360px) {
+        .cm-card {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .cm-value {
+            text-align: left;
+            width: 100%;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
