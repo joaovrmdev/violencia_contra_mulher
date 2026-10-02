@@ -204,48 +204,51 @@ with tab_eval:
 
 # ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
 with tab_corr:
-    st.subheader(f"Associações Multivariadas - {selected_theme}")
-    st.caption("Correlação de Pearson entre variáveis distintas. A auto-associação diagonal (1.00) foi neutralizada para destacar contrastes reais.")
+    st.subheader(f"Associações entre Fatores - {selected_theme}")
+    st.markdown(
+        "Os valores medem o grau de ligação entre os fatores registrados na ocorrência: **quanto mais próximo de 1 (e mais azul), maior a frequência com que esses eventos acontecem juntos**. "
+        "Valores próximos de 0 indicam que não há relação direta. A diagonal de auto-associação (1,00) foi retirada para destacar apenas o que realmente importa entre variáveis diferentes."
+    )
     
     corr_info = theme_metrics.get("full_correlation_matrix")
     if corr_info:
-        # Nomes completos para o eixo vertical (Y)
+        # Rótulos descritivos para o eixo vertical (Y)
         LABEL_MAP_Y = {
             "idade_paciente": "Idade da Vítima",
-            "numero_envolvidos": "Nº de Agressores",
-            "ocorreu_noite_madrugada": "Período Noturno",
-            "reside_municipio_ocorrencia": "Mesmo Município",
-            "local_residencia": "Na Residência",
-            "gestante": "Gestante",
-            "possui_deficiencia": "Pessoa c/ Deficiência",
-            "violencia_fisica": "Violência Física",
-            "violencia_psicologica": "Violência Psicológica",
+            "numero_envolvidos": "Nº de Agressores Envolvidos",
+            "ocorreu_noite_madrugada": "Ocorrido à Noite/Madrugada (18h às 6h)",
+            "reside_municipio_ocorrencia": "Mora no Município do Fato",
+            "local_residencia": "Ocorrência dentro da Residência",
+            "gestante": "Vítima Gestante",
+            "possui_deficiencia": "Vítima com Deficiência",
+            "violencia_fisica": "Agressão / Lesão Física",
+            "violencia_psicologica": "Violência Psicológica / Humilhação",
             "violencia_sexual": "Violência Sexual",
-            "violencia_financeira": "Violência Financeira",
+            "violencia_financeira": "Violência Patrimonial / Financeira",
             "violencia_negligencia": "Negligência / Abandono",
             "violencia_tortura": "Tortura",
-            "meio_forca_corporal": "Força Corporal",
-            "meio_enforcamento": "Enforcamento / Asfixia",
-            "meio_objeto_contundente": "Objeto Contundente",
-            "meio_objeto_perfurante": "Objeto Perfurante",
-            "meio_arma_fogo": "Arma de Fogo",
+            "meio_forca_corporal": "Uso de Força Corporal / Socos",
+            "meio_enforcamento": "Tentativa de Asfixia / Enforcamento",
+            "meio_objeto_contundente": "Objeto Contundente (Pedaço de pau, barra)",
+            "meio_objeto_perfurante": "Objeto Cortante / Faca",
+            "meio_arma_fogo": "Uso de Arma de Fogo",
             "meio_ameaca": "Ameaça Verbal",
-            "autor_alcoolizado": "Autor Alcoolizado",
-            "target_reincidencia": "Reincidência (Alvo)",
-            "autor_parceiro_ou_ex": "Parceiro/Ex (Alvo)",
-            "encaminhamento_delegacia_mulher": "DEAM (Alvo)"
+            "autor_alcoolizado": "Agressor sob Efeito de Álcool",
+            "target_reincidencia": "Reincidência (Alvo do Modelo)",
+            "autor_parceiro_ou_ex": "Agressor é Parceiro/Ex (Alvo)",
+            "encaminhamento_delegacia_mulher": "Encaminhada à Delegacia da Mulher (DEAM)"
         }
 
-        # Nomes compactados em 2 linhas para o eixo horizontal (X) manter-se reto sem inclinação
+        # Rótulos compactados em duas linhas para o eixo horizontal (X) sem inclinação
         LABEL_MAP_X = {
             "idade_paciente": "Idade<br>Vítima",
             "numero_envolvidos": "Nº<br>Agressores",
-            "ocorreu_noite_madrugada": "Período<br>Noturno",
-            "reside_municipio_ocorrencia": "Mesmo<br>Município",
-            "local_residencia": "Na<br>Residência",
-            "gestante": "Gestante",
+            "ocorreu_noite_madrugada": "Noite /<br>Madrugada",
+            "reside_municipio_ocorrencia": "Mora no<br>Município",
+            "local_residencia": "Dentro de<br>Casa",
+            "gestante": "Vítima<br>Gestante",
             "possui_deficiencia": "Pessoa c/<br>Deficiência",
-            "violencia_fisica": "Violência<br>Física",
+            "violencia_fisica": "Agressão<br>Física",
             "violencia_psicologica": "Violência<br>Psicológica",
             "violencia_sexual": "Violência<br>Sexual",
             "violencia_financeira": "Violência<br>Financeira",
@@ -254,13 +257,13 @@ with tab_corr:
             "meio_forca_corporal": "Força<br>Corporal",
             "meio_enforcamento": "Asfixia /<br>Enforc.",
             "meio_objeto_contundente": "Objeto<br>Contund.",
-            "meio_objeto_perfurante": "Objeto<br>Perfur.",
+            "meio_objeto_perfurante": "Faca /<br>Cortante",
             "meio_arma_fogo": "Arma de<br>Fogo",
             "meio_ameaca": "Ameaça<br>Verbal",
-            "autor_alcoolizado": "Autor<br>Álcool",
-            "target_reincidencia": "Reincid.<br>(Alvo)",
-            "autor_parceiro_ou_ex": "Parceiro<br>(Alvo)",
-            "encaminhamento_delegacia_mulher": "DEAM<br>(Alvo)"
+            "autor_alcoolizado": "Agressor c/<br>Álcool",
+            "target_reincidencia": "Reincidência<br>(Alvo)",
+            "autor_parceiro_ou_ex": "Parceiro/Ex<br>(Alvo)",
+            "encaminhamento_delegacia_mulher": "Delegacia<br>Mulher (DEAM)"
         }
 
         df_raw = pd.DataFrame(
@@ -272,7 +275,7 @@ with tab_corr:
         target_slug = theme_metrics["slug"]
         target_name = LABEL_MAP_Y.get(target_slug, target_slug)
 
-        # Painel resumido no topo
+        # Cartões de Destaque
         if target_slug in df_raw.columns:
             target_series = df_raw[target_slug].drop(index=target_slug, errors="ignore")
             max_pos_col = target_series.idxmax()
@@ -280,36 +283,32 @@ with tab_corr:
             max_neg_col = target_series.idxmin()
             max_neg_val = target_series.min()
 
-            kpi1, kpi2, kpi3 = st.columns(3)
-            with kpi1:
-                st.metric("Maior Associação Positiva", f"+{max_pos_val:.2f}", LABEL_MAP_Y.get(max_pos_col, max_pos_col))
-            with kpi2:
-                st.metric("Maior Associação Negativa", f"{max_neg_val:.2f}", LABEL_MAP_Y.get(max_neg_col, max_neg_col))
-            with kpi3:
-                st.metric("Escala Efetiva Observada", f"{max_neg_val:.2f} a +{max_pos_val:.2f}", "Sem distorção diagonal")
+            k1, k2, k3 = st.columns(3)
+            with k1:
+                st.metric("Maior Ligação Direta", f"+{max_pos_val:.2f}", LABEL_MAP_Y.get(max_pos_col, max_pos_col))
+            with k2:
+                st.metric("Menor Ligação / Incompatível", f"{max_neg_val:.2f}", LABEL_MAP_Y.get(max_neg_col, max_neg_col))
+            with k3:
+                st.metric("Faixa Efetiva de Variação", f"{max_neg_val:.2f} até +{max_pos_val:.2f}", "Escala calibrada")
 
         st.markdown("---")
 
-        # 1. Converte para array NumPy editavel do tipo float
+        # Conversão segura para NumPy e aplicação da máscara
         arr = df_raw.to_numpy(dtype=float, copy=True)
-
-        # 2. Mascara triangular superior + diagonal principal (k=0 pega a diagonal e tudo acima dela)
         mask_upper_and_diag = np.triu(np.ones_like(arr, dtype=bool), k=0)
         arr[mask_upper_and_diag] = np.nan
 
-        # 3. Monta o DataFrame de plotagem com os rotulos formatados
         cols_x = [LABEL_MAP_X.get(col, col) for col in df_raw.columns]
         idx_y = [LABEL_MAP_Y.get(idx, idx) for idx in df_raw.index]
         df_plot = pd.DataFrame(arr, columns=cols_x, index=idx_y)
 
-        # Escala monocromática centrada no azul Gemini (#1a73e8)
-        # O teto de cor é fixado em 0.65 para que as maiores associações reais atinjam o azul pleno
+        # Gradiente azul monocromático
         gemini_scale = [
-            [0.0, "#eef2f6"],   # Neutro / cinza claro para valores negativos e próximos de zero
+            [0.0, "#f1f3f4"],   # Cinza muito claro para correlações baixas/negativas
             [0.35, "#ffffff"],  # Ponto neutro
-            [0.55, "#d2e3fc"],  # Azul pastel suave (correlações baixas/médias: 0.15 a 0.25)
-            [0.80, "#4285f4"],  # Azul intermediário (0.35 a 0.45)
-            [1.0, "#1a73e8"]    # Azul Gemini corporativo para associações fortes (>= 0.60)
+            [0.55, "#d2e3fc"],  # Azul sutil (associações de 0.15 a 0.25)
+            [0.80, "#4285f4"],  # Azul médio (associações de 0.35 a 0.45)
+            [1.0, "#1a73e8"]    # Azul primário (associações fortes >= 0.60)
         ]
 
         fig = px.imshow(
@@ -320,31 +319,52 @@ with tab_corr:
             range_color=[-0.35, 0.65]
         )
 
+        fig.update_coloraxes(showscale=False)  # Remove totalmente a barra vertical de escala
+
         fig.update_layout(
-            height=750,
+            height=760,
             xaxis=dict(
-                tickangle=0,            # Rótulos retos e horizontais
+                tickangle=0,
                 tickfont=dict(size=9.5, color="#3c4043"),
                 side="bottom"
             ),
             yaxis=dict(
                 tickfont=dict(size=10.5, color="#3c4043")
             ),
-            margin=dict(l=40, r=20, t=20, b=80),
-            coloraxis_colorbar=dict(
-                title=None,             # Remove o rótulo vertical da barra
-                thickness=12,
-                len=0.7,
-                tickfont=dict(size=10, color="#5f6368")
-            )
+            margin=dict(l=40, r=20, t=10, b=80)
         )
 
-        # Oculta anotações de texto onde o valor é nulo (triângulo superior e diagonal)
         fig.for_each_annotation(lambda a: a.update(text="") if a.text == "nan" else ())
 
         st.plotly_chart(fig, use_container_width=True)
 
-        with st.expander("Visualizar Dados em Formato Tabular"):
+        # Guia descritivo para usuários não técnicos
+        with st.expander("Entenda os Termos e Variáveis da Base de Dados (SINAN)"):
+            g1, g2 = st.columns(2)
+            with g1:
+                st.markdown("""
+                **Termos Institucionais e Locais**
+                * **Delegacia da Mulher (DEAM):** Encaminhamento oficial para a Delegacia Especializada de Atendimento à Mulher da Polícia Civil.
+                * **Noite/Madrugada (18h-6h):** Indica se o episódio de violência foi praticado durante o horário noturno.
+                * **Dentro de Casa:** Fato ocorrido no domicílio habitual da vítima ou do agressor.
+                * **Mora no Município:** A vítima reside na mesma cidade em que a agressão foi registrada.
+                
+                **Perfil e Vulnerabilidades**
+                * **Vítima Gestante:** Confirmação na ficha médica de que a mulher estava grávida no momento do atendimento.
+                * **Pessoa com Deficiência:** Presença de limitação física, auditiva, visual, intelectual ou motora.
+                """)
+            with g2:
+                st.markdown("""
+                **Tipos de Agressão e Instrumentos**
+                * **Agressão Física:** Agressão direta que causou ferimentos, hematomas ou escoriações corporais.
+                * **Força Corporal:** Agressão cometida por espancamento, chutes ou socos, sem uso de ferramentas externas.
+                * **Asfixia / Enforcamento:** Tentativa de estrangulamento ou sufocamento (indicador severo de risco de vida).
+                * **Objeto Contundente:** Ferimento por tacape, pedaço de madeira, barra de ferro ou tijolo.
+                * **Objeto Cortante:** Instrumento perfurocortante como faca, estilete ou tesoura.
+                * **Agressor com Álcool:** Notificação hospitalar de odor etílico ou confirmação de consumo alcoólico pelo autor.
+                """)
+
+        with st.expander("Visualizar Matriz Completa em Tabela"):
             st.dataframe(
                 df_raw.rename(columns=LABEL_MAP_Y, index=LABEL_MAP_Y).style.format(precision=2),
                 use_container_width=True
