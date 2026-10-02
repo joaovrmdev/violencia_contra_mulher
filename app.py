@@ -206,19 +206,19 @@ with tab_eval:
 # ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
 with tab_corr:
     st.subheader(f"Associações Multivariadas - {selected_theme}")
-    st.caption("Coeficientes de correlação linear de Pearson calculados sobre a base histórica do SINAN.")
+    st.caption("Correlação de Pearson entre variáveis distintas. A auto-associação diagonal (1.00) foi neutralizada para destacar contrastes reais.")
     
     corr_info = theme_metrics.get("full_correlation_matrix")
     if corr_info:
-        # Dicionário de tradução técnica para rótulos executivos
-        LABEL_MAP = {
+        # Nomes completos para o eixo vertical (Y)
+        LABEL_MAP_Y = {
             "idade_paciente": "Idade da Vítima",
             "numero_envolvidos": "Nº de Agressores",
             "ocorreu_noite_madrugada": "Período Noturno",
             "reside_municipio_ocorrencia": "Mesmo Município",
             "local_residencia": "Na Residência",
             "gestante": "Gestante",
-            "possui_deficiencia": "Pessoa com Deficiência",
+            "possui_deficiencia": "Pessoa c/ Deficiência",
             "violencia_fisica": "Violência Física",
             "violencia_psicologica": "Violência Psicológica",
             "violencia_sexual": "Violência Sexual",
@@ -237,88 +237,122 @@ with tab_corr:
             "encaminhamento_delegacia_mulher": "DEAM (Alvo)"
         }
 
-        # Carrega e renomeia os eixos
-        df_corr = pd.DataFrame(
+        # Nomes compactados em 2 linhas para o eixo horizontal (X) manter-se reto sem inclinação
+        LABEL_MAP_X = {
+            "idade_paciente": "Idade<br>Vítima",
+            "numero_envolvidos": "Nº<br>Agressores",
+            "ocorreu_noite_madrugada": "Período<br>Noturno",
+            "reside_municipio_ocorrencia": "Mesmo<br>Município",
+            "local_residencia": "Na<br>Residência",
+            "gestante": "Gestante",
+            "possui_deficiencia": "Pessoa c/<br>Deficiência",
+            "violencia_fisica": "Violência<br>Física",
+            "violencia_psicologica": "Violência<br>Psicológica",
+            "violencia_sexual": "Violência<br>Sexual",
+            "violencia_financeira": "Violência<br>Financeira",
+            "violencia_negligencia": "Negligência<br>Abandono",
+            "violencia_tortura": "Tortura",
+            "meio_forca_corporal": "Força<br>Corporal",
+            "meio_enforcamento": "Asfixia /<br>Enforc.",
+            "meio_objeto_contundente": "Objeto<br>Contund.",
+            "meio_objeto_perfurante": "Objeto<br>Perfur.",
+            "meio_arma_fogo": "Arma de<br>Fogo",
+            "meio_ameaca": "Ameaça<br>Verbal",
+            "autor_alcoolizado": "Autor<br>Álcool",
+            "target_reincidencia": "Reincid.<br>(Alvo)",
+            "autor_parceiro_ou_ex": "Parceiro<br>(Alvo)",
+            "encaminhamento_delegacia_mulher": "DEAM<br>(Alvo)"
+        }
+
+        df_raw = pd.DataFrame(
             corr_info["data"],
             columns=corr_info["columns"],
             index=corr_info["index"]
         )
-        df_corr = df_corr.rename(columns=LABEL_MAP, index=LABEL_MAP)
 
         target_slug = theme_metrics["slug"]
-        target_label = LABEL_MAP.get(target_slug, target_slug)
+        target_name = LABEL_MAP_Y.get(target_slug, target_slug)
 
-        # Diagnóstico analítico rápido no topo
-        if target_label in df_corr.columns:
-            target_series = df_corr[target_label].drop(index=target_label, errors="ignore")
-            max_pos = target_series.idxmax()
+        # Painel resumido no topo
+        if target_slug in df_raw.columns:
+            target_series = df_raw[target_slug].drop(index=target_slug, errors="ignore")
+            max_pos_col = target_series.idxmax()
             max_pos_val = target_series.max()
-            max_neg = target_series.idxmin()
+            max_neg_col = target_series.idxmin()
             max_neg_val = target_series.min()
 
             kpi1, kpi2, kpi3 = st.columns(3)
             with kpi1:
-                st.metric("Maior Correlação Positiva", f"+{max_pos_val:.2f}", max_pos)
+                st.metric("Maior Associação Positiva", f"+{max_pos_val:.2f}", LABEL_MAP_Y.get(max_pos_col, max_pos_col))
             with kpi2:
-                st.metric("Maior Correlação Negativa", f"{max_neg_val:.2f}", max_neg)
+                st.metric("Maior Associação Negativa", f"{max_neg_val:.2f}", LABEL_MAP_Y.get(max_neg_col, max_neg_col))
             with kpi3:
-                st.metric("Variáveis Avaliadas", f"{len(df_corr.columns)} atributos", "Pearson Linear")
+                st.metric("Escala Efetiva Observada", f"{max_neg_val:.2f} a +{max_pos_val:.2f}", "Sem distorção diagonal")
 
         st.markdown("---")
 
-        # Aplica máscara triangular inferior para evitar duplicidade
-        mask = np.triu(np.ones_like(df_corr, dtype=bool), k=1)
-        df_corr_masked = df_corr.mask(mask)
+        # 1. Aplica máscara do triângulo superior
+        mask_upper = np.triu(np.ones_like(df_raw, dtype=bool), k=1)
+        df_masked = df_raw.mask(mask_upper)
 
-        # Paleta Monocromática Sóbria (Baseada no azul #1a73e8 do ecossistema Google/Gemini)
-        # Transição: Neutro claro (#f1f3f4) -> Gelo (#d3e3fd) -> Azul Gemini (#1a73e8) -> Azul Profundo (#0b57d0)
-        gemini_blue_scale = [
-            [0.0, "#e8eaed"],  # Neutro sutil para valores negativos / nulos
-            [0.3, "#f8fafd"],  # Branco/gelo próximo ao zero
-            [0.6, "#d3e3fd"],  # Azul pastel suave
-            [0.85, "#1a73e8"], # Azul primário Gemini
-            [1.0, "#0b57d0"]   # Azul profundo para forte associação
+        # 2. Neutraliza a diagonal principal (elimina o 1.00 da coloração)
+        np.fill_diagonal(df_masked.values, np.nan)
+
+        # Aplica renomeações diferenciadas para os eixos
+        df_plot = df_masked.copy()
+        df_plot.columns = [LABEL_MAP_X.get(col, col) for col in df_plot.columns]
+        df_plot.index = [LABEL_MAP_Y.get(idx, idx) for idx in df_plot.index]
+
+        # Escala monocromática centrada no azul Gemini (#1a73e8)
+        # O teto de cor é fixado em 0.65 para que as maiores associações reais atinjam o azul pleno
+        gemini_scale = [
+            [0.0, "#eef2f6"],   # Neutro / cinza claro para valores negativos e próximos de zero
+            [0.35, "#ffffff"],  # Ponto neutro
+            [0.55, "#d2e3fc"],  # Azul pastel suave (correlações baixas/médias: 0.15 a 0.25)
+            [0.80, "#4285f4"],  # Azul intermediário (0.35 a 0.45)
+            [1.0, "#1a73e8"]    # Azul Gemini corporativo para associações fortes (>= 0.60)
         ]
 
         fig = px.imshow(
-            df_corr_masked,
+            df_plot,
             text_auto=".2f",
             aspect="auto",
-            color_continuous_scale=gemini_blue_scale,
-            range_color=[-0.4, 1.0]
+            color_continuous_scale=gemini_scale,
+            range_color=[-0.35, 0.65]
         )
 
         fig.update_layout(
-            height=780,
+            height=750,
             xaxis=dict(
-                tickangle=-45,
-                tickfont=dict(size=11, color="#3c4043"),
+                tickangle=0,            # Rótulos retos e horizontais
+                tickfont=dict(size=9.5, color="#3c4043"),
                 side="bottom"
             ),
             yaxis=dict(
-                tickfont=dict(size=11, color="#3c4043")
+                tickfont=dict(size=10.5, color="#3c4043")
             ),
-            margin=dict(l=40, r=40, t=20, b=140),
+            margin=dict(l=40, r=20, t=20, b=80),
             coloraxis_colorbar=dict(
-                title=dict(text="Intensidade", font=dict(size=12, color="#3c4043")),
-                thickness=14,
-                len=0.75,
+                title=None,             # Remove o rótulo vertical da barra
+                thickness=12,
+                len=0.7,
                 tickfont=dict(size=10, color="#5f6368")
             )
         )
 
-        # Remove anotações das células que caíram na máscara
+        # Oculta anotações de texto onde o valor é nulo (triângulo superior e diagonal)
         fig.for_each_annotation(lambda a: a.update(text="") if a.text == "nan" else ())
 
         st.plotly_chart(fig, use_container_width=True)
 
-        with st.expander("Visualizar Tabela de Dados Formatada"):
+        with st.expander("Visualizar Dados em Formato Tabular"):
             st.dataframe(
-                df_corr.style.format(precision=2),
+                df_raw.rename(columns=LABEL_MAP_Y, index=LABEL_MAP_Y).style.format(precision=2),
                 use_container_width=True
             )
     else:
         st.warning("Matriz de correlação não encontrada no arquivo metrics.json.")
+        
 # ==================== ABA 3: SIMULADOR E CASOS REAIS ====================
 with tab_sim:
     st.subheader("Simulação de Risco e Inserção de Casos Reais")
