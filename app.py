@@ -203,43 +203,122 @@ with tab_eval:
                 st.dataframe(df_rep.style.format(precision=3), use_container_width=True)
 
 # ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
+# ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
 with tab_corr:
-    st.subheader(f"Matriz de Correlação Multivariada - {selected_theme}")
-    st.caption("Correlação linear de Pearson (triângulo inferior). Omissão da metade simétrica para foco analítico.")
+    st.subheader(f"Associações Multivariadas - {selected_theme}")
+    st.caption("Coeficientes de correlação linear de Pearson calculados sobre a base histórica do SINAN.")
     
     corr_info = theme_metrics.get("full_correlation_matrix")
     if corr_info:
+        # Dicionário de tradução técnica para rótulos executivos
+        LABEL_MAP = {
+            "idade_paciente": "Idade da Vítima",
+            "numero_envolvidos": "Nº de Agressores",
+            "ocorreu_noite_madrugada": "Período Noturno",
+            "reside_municipio_ocorrencia": "Mesmo Município",
+            "local_residencia": "Na Residência",
+            "gestante": "Gestante",
+            "possui_deficiencia": "Pessoa com Deficiência",
+            "violencia_fisica": "Violência Física",
+            "violencia_psicologica": "Violência Psicológica",
+            "violencia_sexual": "Violência Sexual",
+            "violencia_financeira": "Violência Financeira",
+            "violencia_negligencia": "Negligência / Abandono",
+            "violencia_tortura": "Tortura",
+            "meio_forca_corporal": "Força Corporal",
+            "meio_enforcamento": "Enforcamento / Asfixia",
+            "meio_objeto_contundente": "Objeto Contundente",
+            "meio_objeto_perfurante": "Objeto Perfurante",
+            "meio_arma_fogo": "Arma de Fogo",
+            "meio_ameaca": "Ameaça Verbal",
+            "autor_alcoolizado": "Autor Alcoolizado",
+            "target_reincidencia": "Reincidência (Alvo)",
+            "autor_parceiro_ou_ex": "Parceiro/Ex (Alvo)",
+            "encaminhamento_delegacia_mulher": "DEAM (Alvo)"
+        }
+
+        # Carrega e renomeia os eixos
         df_corr = pd.DataFrame(
             corr_info["data"],
             columns=corr_info["columns"],
             index=corr_info["index"]
         )
+        df_corr = df_corr.rename(columns=LABEL_MAP, index=LABEL_MAP)
 
+        target_slug = theme_metrics["slug"]
+        target_label = LABEL_MAP.get(target_slug, target_slug)
+
+        # Diagnóstico analítico rápido no topo
+        if target_label in df_corr.columns:
+            target_series = df_corr[target_label].drop(index=target_label, errors="ignore")
+            max_pos = target_series.idxmax()
+            max_pos_val = target_series.max()
+            max_neg = target_series.idxmin()
+            max_neg_val = target_series.min()
+
+            kpi1, kpi2, kpi3 = st.columns(3)
+            with kpi1:
+                st.metric("Maior Correlação Positiva", f"+{max_pos_val:.2f}", max_pos)
+            with kpi2:
+                st.metric("Maior Correlação Negativa", f"{max_neg_val:.2f}", max_neg)
+            with kpi3:
+                st.metric("Variáveis Avaliadas", f"{len(df_corr.columns)} atributos", "Pearson Linear")
+
+        st.markdown("---")
+
+        # Aplica máscara triangular inferior para evitar duplicidade
         mask = np.triu(np.ones_like(df_corr, dtype=bool), k=1)
         df_corr_masked = df_corr.mask(mask)
+
+        # Paleta Monocromática Sóbria (Baseada no azul #1a73e8 do ecossistema Google/Gemini)
+        # Transição: Neutro claro (#f1f3f4) -> Gelo (#d3e3fd) -> Azul Gemini (#1a73e8) -> Azul Profundo (#0b57d0)
+        gemini_blue_scale = [
+            [0.0, "#e8eaed"],  # Neutro sutil para valores negativos / nulos
+            [0.3, "#f8fafd"],  # Branco/gelo próximo ao zero
+            [0.6, "#d3e3fd"],  # Azul pastel suave
+            [0.85, "#1a73e8"], # Azul primário Gemini
+            [1.0, "#0b57d0"]   # Azul profundo para forte associação
+        ]
 
         fig = px.imshow(
             df_corr_masked,
             text_auto=".2f",
             aspect="auto",
-            color_continuous_scale="RdBu_r",
-            range_color=[-1, 1]
+            color_continuous_scale=gemini_blue_scale,
+            range_color=[-0.4, 1.0]
         )
-        
+
         fig.update_layout(
-            height=750,
-            xaxis=dict(tickangle=-45, tickfont=dict(size=10), side="bottom"),
-            yaxis=dict(tickfont=dict(size=10)),
-            margin=dict(l=40, r=40, t=30, b=120),
-            coloraxis_colorbar=dict(title="Correlação", thickness=15, len=0.75)
+            height=780,
+            xaxis=dict(
+                tickangle=-45,
+                tickfont=dict(size=11, color="#3c4043"),
+                side="bottom"
+            ),
+            yaxis=dict(
+                tickfont=dict(size=11, color="#3c4043")
+            ),
+            margin=dict(l=40, r=40, t=20, b=140),
+            coloraxis_colorbar=dict(
+                title=dict(text="Intensidade", font=dict(size=12, color="#3c4043")),
+                thickness=14,
+                len=0.75,
+                tickfont=dict(size=10, color="#5f6368")
+            )
         )
-        
+
+        # Remove anotações das células que caíram na máscara
         fig.for_each_annotation(lambda a: a.update(text="") if a.text == "nan" else ())
+
         st.plotly_chart(fig, use_container_width=True)
 
+        with st.expander("Visualizar Tabela de Dados Formatada"):
+            st.dataframe(
+                df_corr.style.format(precision=2),
+                use_container_width=True
+            )
     else:
         st.warning("Matriz de correlação não encontrada no arquivo metrics.json.")
-
 # ==================== ABA 3: SIMULADOR E CASOS REAIS ====================
 with tab_sim:
     st.subheader("Simulação de Risco e Inserção de Casos Reais")
