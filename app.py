@@ -1,646 +1,1093 @@
-# app.py
+# app.py — v3
+"""Avaliação, interpretação e simulação dos modelos de violência contra a mulher (SINAN).
+
+Arquivos esperados no mesmo diretório (gerados pelo notebook treino_modelos_v3.ipynb):
+  metrics.json · test_samples.json · model_<alvo>_lr.joblib · model_<alvo>_tree.joblib · features.py
+"""
+from __future__ import annotations
+
 import json
+from pathlib import Path
+
 import joblib
-import streamlit as st
-import pandas as pd
 import numpy as np
-import plotly.express as px
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+from plotly.subplots import make_subplots
+
+import features as F
 
 st.set_page_config(
-    page_title="ML - Violencia contra a Mulher (SINAN)",
+    page_title="Violência contra a Mulher · Modelos SINAN",
     page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Feminism_symbol.svg/512px-Feminism_symbol.svg.png",
-    layout="wide"
+    layout="wide",
 )
+BASE = Path(__file__).parent
 
-# Injeção de CSS para Dashboard Profissional, Grid de Confusão e Cards de Notificação
-st.markdown("""
+# ---------------------------------------------------------------------------
+# Tokens visuais (paleta validada para daltonismo: azul/laranja nas séries)
+# ---------------------------------------------------------------------------
+C = {
+    "lr": "#2a78d6", "gbdt": "#eb6834", "v2": "#898781",
+    "pos": "#6250d6", "neg": "#a9a79f",            # desfecho sim / não
+    "up": "#e34948", "down": "#2a78d6", "mid": "#f0efec",   # divergente (aumenta / reduz)
+    "muted": "#898781", "hair": "rgba(137,135,129,0.35)",
+}
+SEQ = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+ALGOS = ["lr", "gbdt"]
+ALGO_NAME = {"lr": "Regressão logística", "gbdt": "Gradient boosting"}
+ALGO_TAG = {"lr": "LR", "gbdt": "GBDT"}
+SCEN_INFO = {
+    "target_reincidencia": ("Reincidência", "A violência já havia acontecido outras vezes?"),
+    "autor_parceiro_ou_ex": ("Agressor íntimo", "O agressor é parceiro ou ex-parceiro?"),
+    "encaminhamento_delegacia_mulher": ("Encaminhamento DEAM", "O caso foi encaminhado à Delegacia da Mulher?"),
+}
+FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+
+st.markdown(f"""
 <style>
-    /* Estilização global e dos Cards de Métricas Nativos */
-    div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        border: 1px solid #f1f3f5;
-        padding: 20px 24px;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-        margin-bottom: 15px;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    div[data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(0,0,0,0.04);
-    }
-    
-    /* Grid Responsivo e Fluido para a Matriz de Confusão */
-    .cm-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 20px;
-        margin-top: 15px;
-        margin-bottom: 35px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-    
-    /* Cartões Flutuantes Sóbrios */
-    .cm-card {
-        background-color: #ffffff;
-        border: 1px solid #f8f9fa;
-        border-radius: 12px;
-        padding: 24px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 16px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .cm-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.05);
-    }
-    
-    .cm-info { 
-        display: flex; 
-        flex-direction: column; 
-        flex: 1 1 160px;
-    }
-    
-    .cm-title {
-        font-size: 0.85em;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 4px;
-    }
-    
-    .cm-desc {
-        font-size: 0.8em;
-        color: #868e96;
-        line-height: 1.4;
-    }
-    
-    .cm-value {
-        font-size: 2.2em;
-        font-weight: 700;
-        letter-spacing: -0.5px;
-        color: #212529; 
-        text-align: right;
-    }
-    
-    /* Paleta Executiva */
-    .card-tn .cm-title { color: #6c757d; }
-    .card-fp .cm-title { color: #a56a6a; }
-    .card-fn .cm-title { color: #a68a56; }
-    .card-tp .cm-title { color: #5f8270; }
-
-    /* Cards de Notificação / Estado da Simulação */
-    .status-card {
-        background-color: #ffffff;
-        border: 1px solid #f1f3f5;
-        border-radius: 12px;
-        padding: 18px 24px;
-        margin-top: 15px;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-    .status-sample {
-        border-left: 5px solid #1a73e8;
-    }
-    .status-sample .status-title {
-        color: #1a73e8;
-        font-size: 0.85em;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .status-warning {
-        border-left: 5px solid #a68a56;
-    }
-    .status-warning .status-title {
-        color: #a68a56;
-        font-size: 0.85em;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .status-manual {
-        border-left: 5px solid #868e96;
-    }
-    .status-manual .status-title {
-        color: #6c757d;
-        font-size: 0.85em;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .status-desc {
-        color: #495057;
-        font-size: 0.88em;
-        line-height: 1.5;
-    }
-
-    @media (max-width: 360px) {
-        .cm-card {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-        .cm-value {
-            text-align: left;
-            width: 100%;
-        }
-    }
+  .block-container {{ padding-top: 3.4rem; max-width: 1320px; }}
+  .ct {{ font-weight: 650; font-size: .98rem; margin: .5rem 0 0; }}
+  .ct-sub {{ font-size: .8rem; opacity: .7; margin: 0 0 -.3rem; }}
+  h1, h2, h3 {{ letter-spacing: -0.01em; }}
+  .hero {{ display:flex; flex-direction:column; gap:.35rem; margin-bottom:.6rem; }}
+  .hero h1 {{ font-size: 1.85rem; font-weight: 700; margin: 0; padding: 0; line-height: 1.2; }}
+  .hero p {{ margin: 0; opacity: .78; font-size: .98rem; max-width: 900px; }}
+  .chips {{ display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.35rem; }}
+  .chip {{ font-size:.78rem; padding:.18rem .6rem; border-radius:999px; border:1px solid {C['hair']};
+           opacity:.9; white-space:nowrap; }}
+  .chip b {{ font-weight:600; }}
+  .tiles {{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: .4rem 0 1rem; }}
+  .tile {{ border:1px solid {C['hair']}; border-radius:12px; padding:14px 16px; background:rgba(127,127,127,.03); }}
+  .tile .lab {{ font-size:.8rem; opacity:.72; }}
+  .tile .val {{ font-size:1.65rem; font-weight:650; line-height:1.25; margin-top:2px; }}
+  .tile .sub {{ font-size:.78rem; opacity:.68; margin-top:2px; }}
+  .tile .delta-up {{ color:#0b8a0b; font-weight:600; }}
+  .tile .delta-down {{ color:#c23a3a; font-weight:600; }}
+  .key {{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:baseline; }}
+  .cm {{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }}
+  .cm .cell {{ border:1px solid {C['hair']}; border-radius:12px; padding:12px 14px; background:rgba(127,127,127,.03); }}
+  .cm .cell .t {{ font-size:.76rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; opacity:.75; }}
+  .cm .cell .v {{ font-size:1.45rem; font-weight:650; }}
+  .cm .cell .d {{ font-size:.76rem; opacity:.68; }}
+  .cm .ok {{ border-left:4px solid #1baf7a; }}
+  .cm .err {{ border-left:4px solid #e34948; }}
+  .note {{ border:1px solid {C['hair']}; border-left:4px solid {C['pos']}; border-radius:10px; padding:10px 14px;
+           font-size:.9rem; margin:.4rem 0 .8rem; background:rgba(98,80,214,.05); }}
+  .note.warn {{ border-left-color:#eda100; background:rgba(237,161,0,.07); }}
+  .note.gray {{ border-left-color:{C['muted']}; background:rgba(127,127,127,.04); }}
+  .note b {{ font-weight:650; }}
+  .pred {{ border:1px solid {C['hair']}; border-radius:12px; padding:14px 16px; background:rgba(127,127,127,.03); }}
+  .pred.sel {{ border-width:2px; }}
+  .pred .top {{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }}
+  .pred .name {{ font-size:.85rem; font-weight:600; }}
+  .pred .p {{ font-size:2rem; font-weight:700; line-height:1.1; }}
+  .pred .cls {{ font-size:.82rem; opacity:.8; }}
+  .bullet {{ position:relative; height:12px; border-radius:6px; background:rgba(127,127,127,.15); margin:12px 0 6px; }}
+  .bullet .fill {{ position:absolute; left:0; top:0; bottom:0; border-radius:6px; }}
+  .bullet .thr {{ position:absolute; top:-5px; bottom:-5px; width:3px; background:#2b2a27; border-radius:2px; }}
+  .bullet .prev {{ position:absolute; top:-3px; bottom:-3px; width:2px; background:{C['muted']}; }}
+  .legend-mini {{ font-size:.74rem; opacity:.7; display:flex; gap:14px; flex-wrap:wrap; }}
+  .feat {{ display:inline-block; font-size:.78rem; padding:.15rem .55rem; margin:.12rem .12rem; border-radius:999px;
+           border:1px solid {C['hair']}; }}
+  .feat.on {{ background:rgba(98,80,214,.08); border-color:rgba(98,80,214,.35); }}
+  .footer {{ font-size:.8rem; opacity:.7; margin-top:2rem; border-top:1px solid {C['hair']}; padding-top:.8rem; }}
+  div[data-testid="stTabs"] button p {{ font-size: .95rem; }}
 </style>
 """, unsafe_allow_html=True)
 
-# 1. Carregamento dos Artefatos
+
+# ---------------------------------------------------------------------------
+# Utilitários
+# ---------------------------------------------------------------------------
+def br(x, d=0):
+    """Número no padrão brasileiro (1.234,5)."""
+    if x is None or (isinstance(x, float) and not np.isfinite(x)):
+        return "–"
+    s = f"{x:,.{d}f}"
+    return s.replace(",", "§").replace(".", ",").replace("§", ".")
+
+
+def pct(x, d=1):
+    return "–" if x is None else br(100 * x, d) + "%"
+
+
+def signed(x, d=3):
+    return ("+" if x >= 0 else "−") + br(abs(x), d)
+
+
+def natural_key(code: str):
+    if code == F.MISSING:
+        return (2, 0, "")
+    try:
+        return (0, float(code), "")
+    except ValueError:
+        return (1, 0, code)
+
+
+def plot(fig, key=None):
+    meta = fig.layout.meta if isinstance(fig.layout.meta, dict) else {}
+    if meta.get("title"):
+        st.markdown(f'<div class="ct">{meta["title"]}</div>', unsafe_allow_html=True)
+    try:
+        st.plotly_chart(fig, width="stretch", theme="streamlit", key=key, config={"displaylogo": False})
+    except Exception:
+        st.plotly_chart(fig, use_container_width=True, theme="streamlit", key=key, config={"displaylogo": False})
+
+
+def table(df, **kw):
+    try:
+        st.dataframe(df, width="stretch", **kw)
+    except Exception:
+        st.dataframe(df, use_container_width=True, **kw)
+
+
+def layout(fig, height=360, title=None, legend=True, **kw):
+    # O título vai para um <div> acima do gráfico (evita colisão com a legenda)
+    fig.update_layout(
+        height=height, font=dict(family=FONT, size=12.5), meta={"title": title} if title else None,
+        margin=dict(l=10, r=16, t=12, b=10),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, xanchor="left", title=None,
+                    font=dict(size=12)) if legend else None,
+        showlegend=legend, hoverlabel=dict(font=dict(family=FONT)), **kw)
+    return fig
+
+
+def tiles_html(items):
+    out = []
+    for it in items:
+        delta = it.get("delta")
+        dh = ""
+        if delta is not None:
+            cls = "delta-up" if delta[1] else "delta-down"
+            dh = f' <span class="{cls}">{delta[0]}</span>'
+        out.append(f'<div class="tile"><div class="lab">{it["label"]}</div><div class="val">{it["value"]}</div>'
+                   f'<div class="sub">{it.get("sub", "")}{dh}</div></div>')
+    st.markdown(f'<div class="tiles">{"".join(out)}</div>', unsafe_allow_html=True)
+
+
+def note(html, kind=""):
+    st.markdown(f'<div class="note {kind}">{html}</div>', unsafe_allow_html=True)
+
+
+def flabel(c):
+    return F.label(c)
+
+
+# ---------------------------------------------------------------------------
+# Artefatos
+# ---------------------------------------------------------------------------
+@st.cache_data
+def load_json(name):
+    return json.loads((BASE / name).read_text(encoding="utf-8"))
+
+
 @st.cache_resource
-def load_assets():
-    with open("metrics.json", "r") as f:
-        metrics = json.load(f)
-    with open("test_samples.json", "r") as f:
-        samples = json.load(f)
-    
-    models = {}
-    for label, data in metrics.items():
-        slug = data["slug"]
-        models[f"{label} - Regressão Logística"] = joblib.load(f"model_{slug}_lr.joblib")
-        models[f"{label} - Árvores de Decisão (GBDT)"] = joblib.load(f"model_{slug}_tree.joblib")
-        
-    return models, metrics, samples
+def load_model(fname):
+    return joblib.load(BASE / fname)
+
 
 try:
-    models, metrics_data, samples_data = load_assets()
-except Exception as e:
-    st.error(f"Erro ao carregar arquivos gerados pelo script de treino: {e}")
-    st.info("Certifique-se de que os arquivos 'metrics.json', 'test_samples.json' e os modelos '.joblib' estão no diretório.")
+    METRICS = load_json("metrics.json")
+    SAMPLES = load_json("test_samples.json")
+except Exception as e:  # noqa: BLE001
+    st.error(f"Não consegui ler os arquivos gerados pelo treino: {e}")
+    st.info("Rode o notebook `treino_modelos_v3.ipynb` e coloque o conteúdo do `modelos_v3.zip` na pasta do app.")
+    st.stop()
+if "scenarios" not in METRICS:
+    st.error("Este `metrics.json` é da versão anterior (v2). Gere os artefatos novos com o notebook `treino_modelos_v3.ipynb`.")
     st.stop()
 
-# 2. Barra Lateral: Parâmetros
-st.sidebar.title("Parâmetros")
-selected_theme = st.sidebar.selectbox("Cenário de Análise:", list(metrics_data.keys()))
-theme_metrics = metrics_data[selected_theme]
+META = METRICS["meta"]
+SCEN = METRICS["scenarios"]
+LABELS = list(SCEN)
 
-selected_algo = st.sidebar.radio(
-    "Família de Algoritmo:",
-    ["Árvores de Decisão (GBDT)", "Regressão Logística"]
-)
-
-model_key = f"{selected_theme} - {selected_algo}"
-active_model = models[model_key]
-
-st.title("Avaliação e Inferência - Violência contra a Mulher")
-st.markdown("Plataforma de modelagem supervisionada de triagem e risco (Dados SINAN/DATASUS).")
-
-tab_eval, tab_corr, tab_sim = st.tabs([
-    "Desempenho dos Modelos",
-    "Matriz de Correlação",
-    "Simulador e Casos de Teste"
-])
-
-# ==================== ABA 1: COMPARAÇÃO DOS MODELOS ====================
-with tab_eval:
-    st.subheader(f"Validação no Conjunto de Teste - {selected_theme}")
-    st.caption(f"Amostragem: {theme_metrics['n_train']:,} registros no treino (80%) | {theme_metrics['n_test']:,} registros no teste (20% não vistos)")
-    
-    comp_col1, comp_col2 = st.columns(2)
-    for col, algo_name in zip([comp_col1, comp_col2], ["Árvores de Decisão (GBDT)", "Regressão Logística"]):
-        with col:
-            st.markdown(f"### {algo_name}")
-            m_data = theme_metrics[algo_name]
-            rep = m_data["report"]
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("ROC-AUC", f"{m_data['roc_auc']:.3f}")
-            c2.metric("Recall (Classe 1)", f"{rep['1']['recall']:.3f}")
-            c3.metric("F1-Score", f"{rep['1']['f1-score']:.3f}")
-            
-            st.markdown("#### Matriz de Confusão")
-            
-            tn, fp = m_data["confusion_matrix"][0]
-            fn, tp = m_data["confusion_matrix"][1]
-            
-            html_cm = f"""
-            <div class="cm-grid">
-                <div class="cm-card card-tn">
-                    <div class="cm-info"><span class="cm-title">Verdadeiro Negativo</span><span class="cm-desc">Modelo previu negativo e acertou.</span></div>
-                    <div class="cm-value">{tn:,}</div>
-                </div>
-                <div class="cm-card card-fp">
-                    <div class="cm-info"><span class="cm-title">Falso Positivo</span><span class="cm-desc">Erro: Modelo acusou risco inexistente (Alarme Falso).</span></div>
-                    <div class="cm-value">{fp:,}</div>
-                </div>
-                <div class="cm-card card-fn">
-                    <div class="cm-info"><span class="cm-title">Falso Negativo</span><span class="cm-desc">Erro Crítico: Modelo falhou em detectar o risco real.</span></div>
-                    <div class="cm-value">{fn:,}</div>
-                </div>
-                <div class="cm-card card-tp">
-                    <div class="cm-info"><span class="cm-title">Verdadeiro Positivo</span><span class="cm-desc">Modelo detectou o risco existente e acertou.</span></div>
-                    <div class="cm-value">{tp:,}</div>
-                </div>
-            </div>
-            """
-            st.markdown(html_cm, unsafe_allow_html=True)
-            
-            with st.expander("Ver Relatório Completo de Classificação"):
-                df_rep = pd.DataFrame(rep).transpose()
-                st.dataframe(df_rep.style.format(precision=3), use_container_width=True)
-
-# ==================== ABA 2: MATRIZ DE CORRELAÇÃO ====================
-with tab_corr:
-    st.subheader(f"Associações entre Fatores - {selected_theme}")
-    st.markdown(
-        "Os valores medem o grau de ligação entre os fatores registrados na ocorrência: quanto mais próximo de 1 (e mais azul), maior a frequência com que esses eventos acontecem juntos. "
-        "Valores próximos de 0 indicam ausência de relação direta. A diagonal de auto-associação (1,00) foi retirada para destacar contrastes reais."
+# ---------------------------------------------------------------------------
+# Barra lateral
+# ---------------------------------------------------------------------------
+with st.sidebar:
+    st.markdown("#### Cenário")
+    scen_label = st.radio(
+        "Cenário", LABELS, label_visibility="collapsed",
+        format_func=lambda l: SCEN_INFO[SCEN[l]["slug"]][0],
+        captions=[SCEN_INFO[SCEN[l]["slug"]][1] for l in LABELS],
     )
-    
-    corr_info = theme_metrics.get("full_correlation_matrix")
-    if corr_info:
-        LABEL_MAP_Y = {
-            "idade_paciente": "Idade da Vítima",
-            "numero_envolvidos": "Nº de Agressores Envolvidos",
-            "ocorreu_noite_madrugada": "Ocorrido à Noite/Madrugada (18h às 6h)",
-            "reside_municipio_ocorrencia": "Mora no Município do Fato",
-            "local_residencia": "Ocorrência dentro da Residência",
-            "gestante": "Vítima Gestante",
-            "possui_deficiencia": "Vítima com Deficiência",
-            "violencia_fisica": "Agressão / Lesão Física",
-            "violencia_psicologica": "Violência Psicológica / Humilhação",
-            "violencia_sexual": "Violência Sexual",
-            "violencia_financeira": "Violência Patrimonial / Financeira",
-            "violencia_negligencia": "Negligência / Abandono",
-            "violencia_tortura": "Tortura",
-            "meio_forca_corporal": "Uso de Força Corporal / Socos",
-            "meio_enforcamento": "Tentativa de Asfixia / Enforcamento",
-            "meio_objeto_contundente": "Objeto Contundente (Pedaço de pau, barra)",
-            "meio_objeto_perfurante": "Objeto Cortante / Faca",
-            "meio_arma_fogo": "Uso de Arma de Fogo",
-            "meio_ameaca": "Ameaça Verbal",
-            "autor_alcoolizado": "Agressor sob Efeito de Álcool",
-            "target_reincidencia": "Reincidência (Alvo do Modelo)",
-            "autor_parceiro_ou_ex": "Agressor é Parceiro/Ex (Alvo)",
-            "encaminhamento_delegacia_mulher": "Encaminhada à Delegacia da Mulher (DEAM)"
-        }
+    st.markdown("#### Modelo em foco")
+    algo = None
+    if hasattr(st, "segmented_control"):
+        algo = st.segmented_control("Modelo", ALGOS, default="gbdt", format_func=ALGO_NAME.get,
+                                    label_visibility="collapsed", key="algo")
+    if algo is None:
+        algo = st.radio("Modelo", ALGOS, index=1, format_func=ALGO_NAME.get, label_visibility="collapsed",
+                        horizontal=True, key="algo_radio") if not hasattr(st, "segmented_control") else "gbdt"
+    st.caption("O modelo em foco define o limiar, a importância e a explicação local. Os gráficos comparativos "
+               "mostram os dois modelos.")
+    st.divider()
+    st.caption(f"Treino v3 · {META.get('generated_at', '')[:10]} · scikit-learn {META.get('sklearn_version')}")
+    if META.get("modo_rapido"):
+        st.warning("Artefatos gerados em MODO_RAPIDO (amostras pequenas). Rode o notebook completo.")
 
-        LABEL_MAP_X = {
-            "idade_paciente": "Idade<br>Vítima",
-            "numero_envolvidos": "Nº<br>Agressores",
-            "ocorreu_noite_madrugada": "Noite /<br>Madrugada",
-            "reside_municipio_ocorrencia": "Mora no<br>Município",
-            "local_residencia": "Dentro de<br>Casa",
-            "gestante": "Vítima<br>Gestante",
-            "possui_deficiencia": "Pessoa c/<br>Deficiência",
-            "violencia_fisica": "Agressão<br>Física",
-            "violencia_psicologica": "Violência<br>Psicológica",
-            "violencia_sexual": "Violência<br>Sexual",
-            "violencia_financeira": "Violência<br>Financeira",
-            "violencia_negligencia": "Negligência<br>Abandono",
-            "violencia_tortura": "Tortura",
-            "meio_forca_corporal": "Força<br>Corporal",
-            "meio_enforcamento": "Asfixia /<br>Enforc.",
-            "meio_objeto_contundente": "Objeto<br>Contund.",
-            "meio_objeto_perfurante": "Faca /<br>Cortante",
-            "meio_arma_fogo": "Arma de<br>Fogo",
-            "meio_ameaca": "Ameaça<br>Verbal",
-            "autor_alcoolizado": "Agressor c/<br>Álcool",
-            "target_reincidencia": "Reincidência<br>(Alvo)",
-            "autor_parceiro_ou_ex": "Parceiro/Ex<br>(Alvo)",
-            "encaminhamento_delegacia_mulher": "Delegacia<br>Mulher (DEAM)"
-        }
+S = SCEN[scen_label]
+SLUG = S["slug"]
+M = S["models"]
+MA = M[algo]
+SHORT, QUESTION = SCEN_INFO[SLUG]
 
-        df_raw = pd.DataFrame(
-            corr_info["data"],
-            columns=corr_info["columns"],
-            index=corr_info["index"]
-        )
+# ---------------------------------------------------------------------------
+# Cabeçalho
+# ---------------------------------------------------------------------------
+yrs = META.get("years") or [None, None]
+st.markdown(f"""
+<div class="hero">
+  <h1>Violência contra a mulher · modelos preditivos</h1>
+  <p>Modelos supervisionados treinados com <b>{br(META['n_rows_csv'])}</b> notificações de violência interpessoal
+  contra mulheres de 14 anos ou mais no SINAN ({yrs[0]}–{yrs[1]}). Ferramenta de estudo — não substitui avaliação
+  profissional nem deve orientar decisões sobre casos individuais.</p>
+  <div class="chips">
+    <span class="chip">Cenário: <b>{SHORT}</b></span>
+    <span class="chip">{QUESTION}</span>
+    <span class="chip">{br(S['n_total'])} casos com desfecho informado · {S['years'][0]}–{S['years'][1]}</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-        target_slug = theme_metrics["slug"]
-        if target_slug in df_raw.columns:
-            target_series = df_raw[target_slug].drop(index=target_slug, errors="ignore")
-            max_pos_col = target_series.idxmax()
-            max_pos_val = target_series.max()
-            max_neg_col = target_series.idxmin()
-            max_neg_val = target_series.min()
+tab_over, tab_perf, tab_feat, tab_assoc, tab_fair, tab_sim, tab_meth = st.tabs([
+    "Visão geral", "Desempenho", "Variáveis", "Associações", "Equidade", "Simulador", "Metodologia"])
 
-            k1, k2, k3 = st.columns(3)
-            with k1:
-                st.metric("Maior Ligação Direta", f"+{max_pos_val:.2f}", LABEL_MAP_Y.get(max_pos_col, max_pos_col))
-            with k2:
-                st.metric("Menor Ligação / Incompatível", f"{max_neg_val:.2f}", LABEL_MAP_Y.get(max_neg_col, max_neg_col))
-            with k3:
-                st.metric("Faixa Efetiva de Variação", f"{max_neg_val:.2f} até +{max_pos_val:.2f}", "Escala calibrada")
+# =========================================================================== #
+# 1. VISÃO GERAL
+# =========================================================================== #
+with tab_over:
+    best = max(ALGOS, key=lambda a: M[a]["test"]["roc_auc"])
+    b_auc = M[best]["test"]["roc_auc"]
+    v2 = M[best].get("baseline_v2", {})
+    d = b_auc - v2["roc_auc"] if v2 else None
+    tiles_html([
+        {"label": "Casos no cenário", "value": br(S["n_total"]),
+         "sub": f"treino {br(S['n_train'])} · teste {br(S['n_test'])}"},
+        {"label": "Prevalência do desfecho", "value": pct(S["prevalence_test"]), "sub": "no conjunto de teste"},
+        {"label": f"Melhor AUC no teste · {ALGO_TAG[best]}", "value": br(b_auc, 3),
+         "sub": "vs v2 nos mesmos dados:", "delta": (signed(d), d >= 0) if d is not None else None},
+        {"label": "Variáveis usadas", "value": f"{len(M['lr']['selected_features'])} · {len(M['gbdt']['selected_features'])}",
+         "sub": f"LR · GBDT — de {len(S['candidates'])} candidatas (v2: 26)"},
+    ])
 
-        st.markdown("---")
-
-        arr = df_raw.to_numpy(dtype=float, copy=True)
-        mask_upper_and_diag = np.triu(np.ones_like(arr, dtype=bool), k=0)
-        arr[mask_upper_and_diag] = np.nan
-
-        cols_x = [LABEL_MAP_X.get(col, col) for col in df_raw.columns]
-        idx_y = [LABEL_MAP_Y.get(idx, idx) for idx in df_raw.index]
-        df_plot = pd.DataFrame(arr, columns=cols_x, index=idx_y)
-
-        gemini_scale = [
-            [0.0, "#f1f3f4"],
-            [0.35, "#ffffff"],
-            [0.55, "#d2e3fc"],
-            [0.80, "#4285f4"],
-            [1.0, "#1a73e8"]
-        ]
-
-        fig = px.imshow(
-            df_plot,
-            text_auto=".2f",
-            aspect="auto",
-            color_continuous_scale=gemini_scale,
-            range_color=[-0.35, 0.65]
-        )
-
-        fig.update_coloraxes(showscale=False)
-        fig.update_layout(
-            height=760,
-            xaxis=dict(tickangle=0, tickfont=dict(size=9.5, color="#3c4043"), side="bottom"),
-            yaxis=dict(tickfont=dict(size=10.5, color="#3c4043")),
-            margin=dict(l=40, r=20, t=10, b=80)
-        )
-        fig.for_each_annotation(lambda a: a.update(text="") if a.text == "nan" else ())
-
-        st.plotly_chart(fig, use_container_width=True)
-
-        with st.expander("Entenda os Termos e Variáveis da Base de Dados (SINAN)"):
-            g1, g2 = st.columns(2)
-            with g1:
-                st.markdown("""
-                **Termos Institucionais e Locais**
-                * Delegacia da Mulher (DEAM): Encaminhamento oficial para a Delegacia Especializada de Atendimento à Mulher da Polícia Civil.
-                * Noite/Madrugada (18h-6h): Episódio praticado durante o horário noturno.
-                * Dentro de Casa: Ocorrido no domicílio habitual da vítima ou do agressor.
-                * Mora no Município: Vítima reside na mesma cidade em que a agressão foi registrada.
-                
-                **Perfil e Vulnerabilidades**
-                * Vítima Gestante: Confirmação na ficha médica de gravidez no momento do atendimento.
-                * Pessoa com Deficiência: Presença de limitação física, auditiva, visual ou motora.
-                """)
-            with g2:
-                st.markdown("""
-                **Tipos de Agressão e Instrumentos**
-                * Agressão Física: Agressão direta geradora de lesões, hematomas ou escoriações.
-                * Força Corporal: Agressão cometida por espancamento, socos ou chutes.
-                * Asfixia / Enforcamento: Tentativa de estrangulamento ou sufocamento (alto risco de vida).
-                * Objeto Contundente: Golpe com pau, barra de ferro ou pedra.
-                * Objeto Cortante: Faca, estilete ou tesoura.
-                * Agressor com Álcool: Odor etílico ou confirmação de consumo alcoólico pelo autor.
-                """)
-
-        with st.expander("Visualizar Matriz Completa em Tabela"):
-            st.dataframe(
-                df_raw.rename(columns=LABEL_MAP_Y, index=LABEL_MAP_Y).style.format(precision=2),
-                use_container_width=True
-            )
-    else:
-        st.warning("Matriz de correlação não encontrada no arquivo metrics.json.")
-
-# ==================== ABA 3: SIMULADOR E CASOS REAIS ====================
-with tab_sim:
-    st.subheader("Simulação de Risco e Inserção de Casos Reais")
-
-    # Funções de higienização para evitar divergências falsas de tipo
-    def norm_num(v, default=0):
-        if v is None or pd.isna(v):
-            return default
-        try:
-            return int(round(float(v)))
-        except (ValueError, TypeError):
-            return default
-
-    def norm_code(v, default="ignorado"):
-        if v is None or pd.isna(v):
-            return default
-        s = str(v).strip()
-        if s.endswith(".0"):
-            s = s[:-2]
-        return s
-
-    def map_raca(val):
-        c = norm_code(val, "ignorado")
-        return c if c in ["1", "2", "3", "4", "5"] else "ignorado"
-
-    def map_esc(val):
-        c = norm_code(val, "ignorado")
-        return c if c in ["1", "2", "3", "4", "5", "6"] else "ignorado"
-
-    def map_civ(val):
-        c = norm_code(val, "ignorado")
-        return c if c in ["1", "2", "3", "4"] else "ignorado"
-
-    def map_sex(val):
-        s = norm_code(val, "ignorado").upper()
-        if s in ["M", "1"]: return "M"
-        if s in ["F", "2"]: return "F"
-        if s in ["AMBOS", "3"]: return "Ambos"
-        return "ignorado"
-
-    samples_list = samples_data.get(selected_theme, [])
-    sample_options = ["Modo Manual (Preenchimento Livre)"] + [
-        f"Caso Real #{i+1} (Desfecho Real: {'Sim (1)' if s['target_real'] == 1 else 'Não (0)'} | Idade: {norm_num(s.get('idade_paciente', 28))} anos | {norm_code(s.get('uf_ocorrencia', 'SP'))})"
-        for i, s in enumerate(samples_list)
-    ]
-    
-    selected_sample_idx = st.selectbox(
-        "Carregue uma ocorrência real do conjunto de teste ou mantenha em preenchimento livre:",
-        options=range(len(sample_options)),
-        format_func=lambda x: sample_options[x],
-        key="selector_caso_teste"
-    )
-    
-    is_sample = selected_sample_idx > 0
-    sample_val = samples_list[selected_sample_idx - 1] if is_sample else None
-
-    # Função para extrair dados padronizados do caso
-    def get_val(key, default):
-        if is_sample and key in sample_val:
-            return sample_val[key]
-        return default
-
-    # Formulário de Entradas
-    c1, c2, c3 = st.columns(3)
-    
+    c1, c2 = st.columns([1.15, 1], gap="large")
     with c1:
-        st.markdown("**Perfil da Vítima**")
-        idade = st.number_input("Idade", 14, 105, norm_num(get_val("idade_paciente", 28)))
-        gestante = st.selectbox("Gestante?", [0, 1], index=norm_num(get_val("gestante", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
-        
-        raca_opts = ["1", "2", "3", "4", "5", "ignorado"]
-        cur_raca = map_raca(get_val("raca_paciente", "1"))
-        raca = st.selectbox("Raça/Cor", raca_opts, index=raca_opts.index(cur_raca), format_func=lambda x: {"1": "Branca", "2": "Preta", "3": "Amarela", "4": "Parda", "5": "Indígena"}.get(x, "Ignorado"))
-        
-        esc_opts = ["1", "2", "3", "4", "5", "6", "ignorado"]
-        cur_esc = map_esc(get_val("escolaridade_paciente", "4"))
-        escolaridade = st.selectbox("Escolaridade", esc_opts, index=esc_opts.index(cur_esc), format_func=lambda x: {"1": "Fund. Incompleto", "2": "Fund. Completo", "3": "Médio Incompleto", "4": "Médio Completo", "5": "Superior Incompleto", "6": "Superior Completo"}.get(x, "Ignorado"))
-        
-        civ_opts = ["1", "2", "3", "4", "ignorado"]
-        cur_civ = map_civ(get_val("estado_civil_paciente", "1"))
-        estado_civil = st.selectbox("Estado Civil", civ_opts, index=civ_opts.index(cur_civ), format_func=lambda x: {"1": "Solteira", "2": "Casada/União", "3": "Viúva", "4": "Separada"}.get(x, "Ignorado"))
-        
-        deficiencia = st.selectbox("Possui Deficiência?", [0, 1], index=norm_num(get_val("possui_deficiencia", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
-        
+        # Dumbbell v2 -> v3 para os 6 modelos
+        fig = go.Figure()
+        ycat = [[], []]
+        for lab in LABELS:
+            for a in ALGOS:
+                ycat[0].append(SCEN_INFO[SCEN[lab]["slug"]][0])
+                ycat[1].append(ALGO_TAG[a])
+        v2v = [SCEN[l]["models"][a].get("baseline_v2", {}).get("roc_auc") for l in LABELS for a in ALGOS]
+        v3v = [SCEN[l]["models"][a]["test"]["roc_auc"] for l in LABELS for a in ALGOS]
+        for i in range(len(v3v)):
+            if v2v[i] is not None:
+                fig.add_trace(go.Scatter(x=[v2v[i], v3v[i]], y=[[ycat[0][i]] * 2, [ycat[1][i]] * 2], mode="lines",
+                                         line=dict(color=C["hair"], width=3), hoverinfo="skip", showlegend=False))
+        fig.add_trace(go.Scatter(x=v2v, y=ycat, mode="markers", name="v2 (26 variáveis, mesmos dados)",
+                                 marker=dict(size=11, color=C["v2"], line=dict(width=2, color="white")),
+                                 hovertemplate="v2 · AUC %{x:.3f}<extra></extra>"))
+        for a in ALGOS:
+            idx = [i for i, t in enumerate(ycat[1]) if t == ALGO_TAG[a]]
+            fig.add_trace(go.Scatter(
+                x=[v3v[i] for i in idx], y=[[ycat[0][i] for i in idx], [ycat[1][i] for i in idx]],
+                mode="markers+text", name=f"v3 · {ALGO_NAME[a]}", text=[br(v3v[i], 3) for i in idx],
+                textposition="middle right", textfont=dict(size=11.5),
+                marker=dict(size=12, color=C[a], line=dict(width=2, color="white")),
+                hovertemplate="v3 · AUC %{x:.3f}<extra></extra>"))
+        xmin = min(v for v in v2v + v3v if v is not None)
+        layout(fig, 360, "AUC no teste: v2 × v3 (mesma divisão dos dados)")
+        fig.update_xaxes(range=[xmin - 0.02, max(v3v) + 0.045], tickformat=".2f", showgrid=True)
+        fig.update_yaxes(autorange="reversed")
+        plot(fig, "dumbbell")
+        st.caption("A v2 foi retreinada nos dados novos com a configuração original (26 variáveis, "
+                   "class_weight='balanced'), para a comparação ser justa.")
     with c2:
-        st.markdown("**Circunstâncias da Ocorrência**")
-        uf_opts = ["SP", "RJ", "MG", "BA", "RS", "PR", "PE", "CE", "PA", "SC", "GO", "MA", "PB", "ES", "AM", "RN", "AL", "PI", "MT", "DF", "MS", "SE", "RO", "TO", "AC", "AP", "RR"]
-        cur_uf = norm_code(get_val("uf_ocorrencia", "SP")).upper()
-        uf_idx = uf_opts.index(cur_uf) if cur_uf in uf_opts else 0
-        uf = st.selectbox("UF", uf_opts, index=uf_idx)
-        
-        dia_val = norm_num(get_val("dia_semana_ocorrencia", 1))
-        dia_idx = max(0, min(6, dia_val - 1))
-        dia_semana = st.selectbox("Dia da Semana", [1, 2, 3, 4, 5, 6, 7], index=dia_idx, format_func=lambda x: {1: "Dom", 2: "Seg", 3: "Ter", 4: "Qua", 5: "Qui", 6: "Sex", 7: "Sáb"}[x])
-        
-        noite = st.selectbox("Período Noturno (18h-06h)?", [0, 1], index=norm_num(get_val("ocorreu_noite_madrugada", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
-        mesmo_mun = st.selectbox("Reside no mesmo município?", [1, 0], index=0 if norm_num(get_val("reside_municipio_ocorrencia", 1)) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não")
-        casa = st.selectbox("Ocorreu na Residência?", [1, 0], index=0 if norm_num(get_val("local_residencia", 1)) == 1 else 1, format_func=lambda x: "Sim" if x == 1 else "Não")
-        num_env = st.number_input("Número de Agressores", 1, 10, max(1, norm_num(get_val("numero_envolvidos", 1))))
-        
-        sex_opts = ["M", "F", "Ambos", "ignorado"]
-        cur_sex = map_sex(get_val("autor_sexo", "M"))
-        sex_idx = sex_opts.index(cur_sex) if cur_sex in sex_opts else 0
-        autor_sexo = st.selectbox("Sexo do Agressor", sex_opts, index=sex_idx)
-        
-        alcool = st.selectbox("Suspeita de Uso de Álcool?", [0, 1], index=norm_num(get_val("autor_alcoolizado", 0)), format_func=lambda x: "Sim" if x == 1 else "Não")
-        
+        rby = S.get("rate_by_year", {})
+        if rby:
+            yy = sorted(int(k) for k in rby)
+            rows_year = META.get("rows_per_year", {})
+            ns = [rows_year.get(str(y), rows_year.get(y)) for y in yy]
+            low = [n is not None and n < 15000 for n in ns]
+            fig = go.Figure(go.Scatter(
+                x=yy, y=[rby[str(y)] if str(y) in rby else rby[y] for y in yy], mode="lines+markers",
+                line=dict(color=C["pos"], width=2), name="taxa",
+                marker=dict(size=[9 if l else 7 for l in low], color=["white" if l else C["pos"] for l in low],
+                            line=dict(color=C["pos"], width=2)),
+                customdata=[br(n) if n else "–" for n in ns],
+                hovertemplate="%{x}: %{y:.1%}<br>%{customdata} notificações no ano<extra></extra>"))
+            layout(fig, 360, f"Taxa do desfecho por ano — {SHORT.lower()}", legend=False)
+            fig.update_yaxes(tickformat=".0%")
+            fig.update_xaxes(dtick=2)
+            plot(fig, "rate_year")
+            if any(low):
+                st.caption("Marcadores vazados: anos com menos de 15 mil notificações na base (2013–2014 estão "
+                           "incompletos no reprocessamento atual da Base dos Dados).")
+
+    # Leitura automática
+    k_lr, k_gb = len(M["lr"]["selected_features"]), len(M["gbdt"]["selected_features"])
+    top_feat = [flabel(r["feature"]) for r in M[best]["importance"][:3]]
+    temporal = M[best].get("temporal")
+    bullets = [
+        f"O melhor modelo é o **{ALGO_NAME[best]}**, com AUC de **{br(b_auc, 3)}** no teste"
+        + (f" (**{signed(d)}** em relação à v2 nos mesmos dados)." if d is not None else "."),
+        f"A seleção reduziu as variáveis para **{k_lr}** (LR) e **{k_gb}** (GBDT), de {len(S['candidates'])} candidatas.",
+        f"O que mais pesa no {ALGO_TAG[best]}: {', '.join(top_feat)}.",
+    ]
+    if temporal:
+        bullets.append(f"Na validação temporal (treino {temporal['train_years']}, teste {temporal['test_years']}) a AUC "
+                       f"foi **{br(temporal['auc'], 3)}**, contra {br(b_auc, 3)} na divisão aleatória.")
+    st.markdown("**Leitura rápida**\n\n" + "\n".join(f"- {b}" for b in bullets))
+
+# =========================================================================== #
+# 2. DESEMPENHO
+# =========================================================================== #
+with tab_perf:
+    hist = MA["curves"]["score_hist"]
+    pos_h, neg_h = np.array(hist["pos"], dtype=float), np.array(hist["neg"], dtype=float)
+    thr_default = float(np.round(MA["threshold"], 2))
+    key_thr = f"thr_{SLUG}_{algo}"
+
+    def _reset_thr():
+        st.session_state[key_thr] = thr_default
+
+    st.markdown(f"##### Limiar de decisão · {ALGO_NAME[algo]}")
+    cA, cB = st.columns([3, 1])
+    with cA:
+        thr = st.slider("Probabilidade a partir da qual o caso é classificado como positivo", 0.01, 0.99,
+                        value=thr_default, step=0.01, key=key_thr)
+    with cB:
+        st.write("")
+        st.button("Voltar ao limiar recomendado", on_click=_reset_thr, key=f"reset_{key_thr}")
+    st.caption(f"Limiar recomendado = {br(MA['threshold'], 3)} (máximo do índice de Youden na validação interna). "
+               "Métricas abaixo recalculadas no conjunto de teste em passos de 0,01.")
+
+    i = int(round(thr * 100))
+    TP, FN, FP, TN = pos_h[i:].sum(), pos_h[:i].sum(), neg_h[i:].sum(), neg_h[:i].sum()
+    N = TP + FN + FP + TN
+    rec = TP / max(TP + FN, 1)
+    spec = TN / max(TN + FP, 1)
+    prec = TP / max(TP + FP, 1)
+    f1 = 2 * prec * rec / max(prec + rec, 1e-9)
+    tiles_html([
+        {"label": "Sensibilidade (recall)", "value": pct(rec), "sub": "positivos reais detectados"},
+        {"label": "Especificidade", "value": pct(spec), "sub": "negativos reais descartados"},
+        {"label": "Precisão (VPP)", "value": pct(prec), "sub": "alertas que eram positivos"},
+        {"label": "F1", "value": br(f1, 3), "sub": "média harmônica precisão × recall"},
+        {"label": "Casos sinalizados", "value": pct((TP + FP) / N), "sub": f"prevalência real {pct(S['prevalence_test'])}"},
+    ])
+
+    c1, c2 = st.columns([1, 1.35], gap="large")
+    with c1:
+        st.markdown(f"""
+<div class="cm">
+  <div class="cell ok"><div class="t">Verdadeiro negativo</div><div class="v">{br(TN)}</div>
+    <div class="d">{pct(TN / N)} do teste · previu não, era não</div></div>
+  <div class="cell err"><div class="t">Falso positivo</div><div class="v">{br(FP)}</div>
+    <div class="d">{pct(FP / N)} · alarme sem desfecho</div></div>
+  <div class="cell err"><div class="t">Falso negativo</div><div class="v">{br(FN)}</div>
+    <div class="d">{pct(FN / N)} · desfecho não detectado</div></div>
+  <div class="cell ok"><div class="t">Verdadeiro positivo</div><div class="v">{br(TP)}</div>
+    <div class="d">{pct(TP / N)} · previu sim, era sim</div></div>
+</div>""", unsafe_allow_html=True)
+        st.caption("Linhas = desfecho real (não / sim); colunas = previsão (não / sim).")
+    with c2:
+        mids = (np.array(hist["bin_edges"][:-1]) + np.array(hist["bin_edges"][1:])) / 2
+        fig = go.Figure()
+        for arr, name, col in [(neg_h, "Desfecho real = não", C["neg"]), (pos_h, "Desfecho real = sim", C["pos"])]:
+            dens = arr / max(arr.sum(), 1)
+            fig.add_trace(go.Scatter(x=mids, y=dens, mode="lines", line=dict(color=col, width=2, shape="hvh"),
+                                     fill="tozeroy", fillcolor=col + "1f", name=name,
+                                     hovertemplate="prob. %{x:.2f}: %{y:.1%} dos casos<extra>" + name + "</extra>"))
+        fig.add_vline(x=thr, line=dict(color=C["muted"], width=1.5))
+        fig.add_annotation(x=thr, y=1, yref="paper", text=f"limiar {br(thr, 2)}", showarrow=False,
+                           xanchor="left", xshift=4, font=dict(size=11, color=C["muted"]))
+        layout(fig, 300, "Distribuição das probabilidades previstas no teste")
+        fig.update_xaxes(range=[0, 1], tickformat=".0%", title="probabilidade prevista")
+        fig.update_yaxes(tickformat=".0%", title="% dos casos da classe")
+        plot(fig, "score_hist")
+
+    st.markdown("##### Curvas dos dois modelos")
+    c1, c2, c3 = st.columns(3, gap="medium")
+    with c1:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", line=dict(color=C["hair"], width=1),
+                                 hoverinfo="skip", showlegend=False))
+        for a in ALGOS:
+            r = M[a]["curves"]["roc"]
+            fig.add_trace(go.Scatter(x=r["fpr"], y=r["tpr"], mode="lines", line=dict(color=C[a], width=2),
+                                     name=f"{ALGO_TAG[a]} · AUC {br(M[a]['test']['roc_auc'], 3)}",
+                                     hovertemplate="FPR %{x:.2f} · TPR %{y:.2f}<extra></extra>"))
+        fig.add_trace(go.Scatter(x=[1 - spec], y=[rec], mode="markers", name="ponto de operação",
+                                 marker=dict(size=11, color=C[algo], symbol="circle", line=dict(width=2, color="white")),
+                                 hovertemplate="limiar atual<br>FPR %{x:.2f} · TPR %{y:.2f}<extra></extra>"))
+        layout(fig, 330, "ROC")
+        fig.update_xaxes(title="taxa de falso positivo", range=[0, 1])
+        fig.update_yaxes(title="sensibilidade", range=[0, 1.02])
+        plot(fig, "roc")
+    with c2:
+        fig = go.Figure()
+        prev = S["prevalence_test"]
+        fig.add_trace(go.Scatter(x=[0, 1], y=[prev, prev], mode="lines", line=dict(color=C["hair"], width=1),
+                                 hoverinfo="skip", showlegend=False))
+        for a in ALGOS:
+            r = M[a]["curves"]["pr"]
+            fig.add_trace(go.Scatter(x=r["recall"], y=r["precision"], mode="lines", line=dict(color=C[a], width=2),
+                                     name=f"{ALGO_TAG[a]} · AP {br(M[a]['test']['average_precision'], 3)}",
+                                     hovertemplate="recall %{x:.2f} · precisão %{y:.2f}<extra></extra>"))
+        fig.add_trace(go.Scatter(x=[rec], y=[prec], mode="markers", name="ponto de operação",
+                                 marker=dict(size=11, color=C[algo], line=dict(width=2, color="white")),
+                                 hovertemplate="limiar atual<extra></extra>", showlegend=False))
+        layout(fig, 330, "Precisão × recall")
+        fig.update_xaxes(title="recall", range=[0, 1])
+        fig.update_yaxes(title="precisão", range=[0, 1.02])
+        plot(fig, "pr")
     with c3:
-        st.markdown("**Tipologia e Meios Empregados**")
-        v_fisica = st.checkbox("Violência Física", bool(norm_num(get_val("violencia_fisica", 1))))
-        v_psico = st.checkbox("Violência Psicológica", bool(norm_num(get_val("violencia_psicologica", 1))))
-        v_sexual = st.checkbox("Violência Sexual", bool(norm_num(get_val("violencia_sexual", 0))))
-        v_financ = st.checkbox("Violência Financeira", bool(norm_num(get_val("violencia_financeira", 0))))
-        v_neglig = st.checkbox("Negligência / Abandono", bool(norm_num(get_val("violencia_negligencia", 0))))
-        v_tortura = st.checkbox("Tortura", bool(norm_num(get_val("violencia_tortura", 0))))
-        m_forca = st.checkbox("Força Corporal / Espancamento", bool(norm_num(get_val("meio_forca_corporal", 1))))
-        m_ameaca = st.checkbox("Ameaça Verbal", bool(norm_num(get_val("meio_ameaca", 1))))
-        m_perfurante = st.checkbox("Objeto Perfurante / Faca", bool(norm_num(get_val("meio_objeto_perfurante", 0))))
-        m_contundente = st.checkbox("Objeto Contundente", bool(norm_num(get_val("meio_objeto_contundente", 0))))
-        m_enforcamento = st.checkbox("Enforcamento / Estrangulamento", bool(norm_num(get_val("meio_enforcamento", 0))))
-        m_arma = st.checkbox("Arma de Fogo", bool(norm_num(get_val("meio_arma_fogo", 0))))
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", line=dict(color=C["hair"], width=1),
+                                 hoverinfo="skip", showlegend=False))
+        for a in ALGOS:
+            cal = M[a]["curves"]["calibration"]
+            fig.add_trace(go.Scatter(x=cal["mean_predicted"], y=cal["observed"], mode="lines+markers",
+                                     line=dict(color=C[a], width=2), marker=dict(size=7),
+                                     name=f"{ALGO_TAG[a]} · Brier {br(M[a]['test']['brier'], 3)}",
+                                     hovertemplate="previsto %{x:.1%} · observado %{y:.1%}<extra></extra>"))
+        layout(fig, 330, "Calibração (decis)")
+        fig.update_xaxes(title="probabilidade média prevista", range=[0, 1], tickformat=".0%")
+        fig.update_yaxes(title="taxa observada", range=[0, 1], tickformat=".0%")
+        plot(fig, "calib")
+    st.caption("Calibração: pontos sobre a diagonal indicam que uma probabilidade de 30% corresponde, de fato, a ~30% "
+               "de casos positivos. Os modelos v3 são treinados sem pesos de classe, por isso a probabilidade é "
+               "interpretável — na v2 (class_weight='balanced') ela era inflada.")
 
-    # Conferência precisa de integridade com o caso real
-    campos_alterados = []
-    if is_sample:
-        conferencias = [
-            (norm_num(idade) != norm_num(sample_val.get("idade_paciente")), "Idade"),
-            (norm_num(gestante) != norm_num(sample_val.get("gestante")), "Gestante"),
-            (map_raca(raca) != map_raca(sample_val.get("raca_paciente")), "Raça"),
-            (map_esc(escolaridade) != map_esc(sample_val.get("escolaridade_paciente")), "Escolaridade"),
-            (map_civ(estado_civil) != map_civ(sample_val.get("estado_civil_paciente")), "Estado Civil"),
-            (norm_num(deficiencia) != norm_num(sample_val.get("possui_deficiencia")), "Deficiência"),
-            (norm_code(uf).upper() != norm_code(sample_val.get("uf_ocorrencia")).upper(), "UF"),
-            (norm_num(dia_semana) != norm_num(sample_val.get("dia_semana_ocorrencia")), "Dia da Semana"),
-            (norm_num(noite) != norm_num(sample_val.get("ocorreu_noite_madrugada")), "Período Noturno"),
-            (norm_num(mesmo_mun) != norm_num(sample_val.get("reside_municipio_ocorrencia")), "Mesmo Município"),
-            (norm_num(casa) != norm_num(sample_val.get("local_residencia")), "Na Residência"),
-            (norm_num(num_env) != norm_num(sample_val.get("numero_envolvidos")), "Nº Agressores"),
-            (map_sex(autor_sexo) != map_sex(sample_val.get("autor_sexo")), "Sexo do Autor"),
-            (norm_num(alcool) != norm_num(sample_val.get("autor_alcoolizado")), "Álcool"),
-            (int(v_fisica) != norm_num(sample_val.get("violencia_fisica")), "Violência Física"),
-            (int(v_psico) != norm_num(sample_val.get("violencia_psicologica")), "Violência Psicológica"),
-            (int(v_sexual) != norm_num(sample_val.get("violencia_sexual")), "Violência Sexual"),
-            (int(v_financ) != norm_num(sample_val.get("violencia_financeira")), "Violência Financeira"),
-            (int(v_neglig) != norm_num(sample_val.get("violencia_negligencia")), "Negligência"),
-            (int(v_tortura) != norm_num(sample_val.get("violencia_tortura")), "Tortura"),
-            (int(m_forca) != norm_num(sample_val.get("meio_forca_corporal")), "Força Corporal"),
-            (int(m_ameaca) != norm_num(sample_val.get("meio_ameaca")), "Ameaça"),
-            (int(m_perfurante) != norm_num(sample_val.get("meio_objeto_perfurante")), "Objeto Perfurante"),
-            (int(m_contundente) != norm_num(sample_val.get("meio_objeto_contundente")), "Objeto Contundente"),
-            (int(m_enforcamento) != norm_num(sample_val.get("meio_enforcamento")), "Enforcamento"),
-            (int(m_arma) != norm_num(sample_val.get("meio_arma_fogo")), "Arma de Fogo")
-        ]
-        campos_alterados = [label for alterado, label in conferencias if alterado]
+    st.markdown("##### Comparação detalhada")
+    rows = []
+    for a in ALGOS:
+        t = M[a]["test"]
+        r1 = t["report"]["1"]
+        rows.append({"Modelo": f"v3 · {ALGO_NAME[a]}", "Nº variáveis": len(M[a]["selected_features"]),
+                     "AUC": t["roc_auc"], "IC 95% AUC": f"{br(t['roc_auc_ci95'][0], 3)}–{br(t['roc_auc_ci95'][1], 3)}",
+                     "AP": t["average_precision"], "Brier": t["brier"], "Limiar": t["threshold"],
+                     "Recall": r1["recall"], "Precisão": r1["precision"], "F1": r1["f1-score"],
+                     "AUC temporal": M[a].get("temporal", {}).get("auc")})
+    for a in ALGOS:
+        b = M[a].get("baseline_v2")
+        if b:
+            rows.append({"Modelo": f"v2 · {ALGO_NAME[a]} (mesmos dados)", "Nº variáveis": b["n_features"],
+                         "AUC": b["roc_auc"], "IC 95% AUC": "", "AP": b.get("average_precision"),
+                         "Brier": b.get("brier"), "Limiar": 0.5, "Recall": b["recall"], "Precisão": b["precision"],
+                         "F1": b["f1"], "AUC temporal": None})
+    dfc = pd.DataFrame(rows).set_index("Modelo")
+    for c_ in ["AUC", "AP", "Brier", "Limiar", "Recall", "Precisão", "F1", "AUC temporal"]:
+        dfc[c_] = pd.to_numeric(dfc[c_], errors="coerce")
+    table(dfc.style.format({c: "{:.3f}" for c in ["AUC", "AP", "Brier", "Limiar", "Recall", "Precisão", "F1",
+                                                   "AUC temporal"]}, na_rep="–"))
+    tm = [M[a].get("temporal") for a in ALGOS]
+    if all(tm):
+        t0 = tm[0]
+        st.caption(f"AUC temporal: treino com casos de {t0['train_years']} e teste em {t0['test_years']} "
+                   f"({br(t0['n_test'])} casos). Taxa real no período de teste {pct(t0['prevalence_test'])}; "
+                   f"média prevista {pct(tm[0]['mean_pred_test'])} (LR) e {pct(tm[1]['mean_pred_test'])} (GBDT).")
 
-    # Exibição do Card Informativo / Alerta de Transição
-    if is_sample and len(campos_alterados) == 0:
-        desfecho_txt = "POSITIVO (1)" if sample_val["target_real"] == 1 else "NEGATIVO (0)"
-        st.markdown(f"""
-        <div class="status-card status-sample">
-            <span class="status-title">Caso Real Carregado (Fidedigno)</span>
-            <span class="status-desc">Dados extraídos diretamente do conjunto de teste não visto no treino. Desfecho documentado na ficha do SINAN: <strong>{desfecho_txt}</strong>.</span>
-        </div>
-        """, unsafe_allow_html=True)
-    elif is_sample and len(campos_alterados) > 0:
-        st.markdown(f"""
-        <div class="status-card status-warning">
-            <span class="status-title">Aviso de Transição para Simulação Livre</span>
-            <span class="status-desc">
-                Você modificou parâmetros originais deste registro (<strong>{', '.join(campos_alterados)}</strong>). 
-                Os casos de teste reais existem estritamente para avaliar a precisão do modelo frente ao desfecho documental do SINAN. 
-                Ao prosseguir com a inferência, este cenário será tratado como <strong>Preenchimento Livre</strong> e a auditoria histórica será desativada.
-            </span>
-        </div>
-        """, unsafe_allow_html=True)
+# =========================================================================== #
+# 3. VARIÁVEIS
+# =========================================================================== #
+with tab_feat:
+    c1, c2 = st.columns([1.1, 1], gap="large")
+    with c1:
+        fig = go.Figure()
+        for a in ALGOS:
+            steps = M[a]["selection"]["steps"]
+            ks = [s["k"] for s in steps]
+            aucs = [s["auc"] for s in steps]
+            removed = [", ".join(flabel(f) for f in s.get("removed", [])) or "–" for s in steps]
+            fig.add_trace(go.Scatter(x=ks, y=aucs, mode="lines", line=dict(color=C[a], width=2), name=ALGO_NAME[a],
+                                     customdata=removed,
+                                     hovertemplate="%{x} variáveis · AUC %{y:.4f}<br>próxima a sair: %{customdata}"
+                                                   "<extra></extra>"))
+            ck, ca = M[a]["selection"]["chosen_k"], M[a]["selection"]["chosen_auc"]
+            fig.add_trace(go.Scatter(x=[ck], y=[ca], mode="markers+text", text=[f"{ck}"], textposition="top center",
+                                     marker=dict(size=11, color=C[a], line=dict(width=2, color="white")),
+                                     showlegend=False, hovertemplate=f"escolhido: {ck} variáveis<extra></extra>"))
+        cut = MA["selection"]["cutoff"]
+        fig.add_hline(y=cut, line=dict(color=C[algo], width=1, dash="dot"))
+        top_auc = max(s_["auc"] for a in ALGOS for s_ in M[a]["selection"]["steps"])
+        layout(fig, 380, "Curva de seleção: AUC na validação × nº de variáveis")
+        fig.update_xaxes(autorange="reversed", title="nº de variáveis no modelo")
+        fig.update_yaxes(title="AUC (validação interna)", tickformat=".3f", range=[top_auc - 0.05, top_auc + 0.006])
+        plot(fig, "rfe")
+        st.caption("Da esquerda para a direita, a cada passo sai a variável menos importante (por permutação). "
+                   "Fica o menor conjunto cuja AUC não é estatisticamente pior que a melhor (regra de 1 erro-padrão; "
+                   f"linha pontilhada = corte do {ALGO_TAG[algo]}). "
+                   "Eixo vertical recortado perto do topo; passe o mouse para ver a AUC dos modelos com poucas variáveis.")
+    with c2:
+        imp = pd.DataFrame(MA["importance"]).sort_values("mean")
+        fig = go.Figure(go.Bar(
+            x=imp["mean"], y=[flabel(f) for f in imp["feature"]], orientation="h",
+            marker=dict(color=C[algo], cornerradius=4), width=0.62,
+            error_x=dict(type="data", array=imp["std"], color=C["muted"], thickness=1, width=0),
+            text=[signed(v, 3) for v in imp["mean"]], textposition="outside", cliponaxis=False,
+            hovertemplate="%{y}: queda de AUC %{x:.4f}<extra></extra>"))
+        layout(fig, max(300, 26 * len(imp) + 80), f"Importância por permutação · {ALGO_NAME[algo]}", legend=False)
+        fig.update_xaxes(title="queda na AUC ao embaralhar a variável", tickformat=".3f")
+        fig.update_layout(margin=dict(r=48))
+        plot(fig, "imp")
+
+    # Matriz de seleção: quais variáveis cada um dos 6 modelos usa
+    st.markdown("##### Quais variáveis cada modelo usa")
+    feats_order = [c for g, cols in F.GROUPS.items() for c in cols if c in F.ALL_CANDIDATES]
+    feats_order += [c for c in F.ALL_CANDIDATES if c not in feats_order]
+    xcat = [[], []]
+    for lab in LABELS:
+        for a in ALGOS:
+            xcat[0].append(SCEN_INFO[SCEN[lab]["slug"]][0])
+            xcat[1].append(ALGO_TAG[a])
+    fig = go.Figure()
+    # Trace invisível que fixa a ordem das linhas (grupos) e colunas (cenário × modelo)
+    sx, sy = [[], []], [[], []]
+    for f in feats_order:
+        for x0, x1 in zip(*xcat):
+            sx[0].append(x0); sx[1].append(x1)
+            sy[0].append(F.GROUP_OF.get(f, "Outras")); sy[1].append(F.short_label(f))
+    fig.add_trace(go.Scatter(x=sx, y=sy, mode="markers", marker=dict(opacity=0), hoverinfo="skip", showlegend=False))
+    for status, sym, size, color_fn, name in [
+        ("sel", "circle", 12, lambda a: C[a], "usada"),
+        ("not", "circle-open", 8, lambda a: C["muted"], "candidata não usada"),
+        ("exc", "x-thin-open", 8, lambda a: C["muted"], "excluída (vazamento / alvo)"),
+    ]:
+        for a in ALGOS:
+            xs, ys, cd = [[], []], [[], []], []
+            for j, lab in enumerate(LABELS):
+                sc = SCEN[lab]
+                mm = sc["models"][a]
+                impd = {r["feature"]: r["mean"] for r in mm["importance"]}
+                for f in feats_order:
+                    if f in mm["selected_features"]:
+                        stt = "sel"
+                    elif f in sc["excluded"] or f not in sc["candidates"]:
+                        stt = "exc"
+                    else:
+                        stt = "not"
+                    if stt != status:
+                        continue
+                    xs[0].append(SCEN_INFO[sc["slug"]][0]); xs[1].append(ALGO_TAG[a])
+                    ys[0].append(F.GROUP_OF.get(f, "Outras")); ys[1].append(F.short_label(f))
+                    cd.append(f"{flabel(f)}<br>{SCEN_INFO[sc['slug']][0]} · {ALGO_NAME[a]}<br>"
+                              + (f"importância {impd.get(f, 0):.4f}" if stt == "sel" else name))
+            if not cd:
+                continue
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode="markers", name=name, legendgroup=status,
+                                     showlegend=(a == "lr" and status != "sel") or (status == "sel"),
+                                     marker=dict(symbol=sym, size=size, color=color_fn(a),
+                                                 line=dict(width=1.5 if status != "sel" else 2,
+                                                           color=color_fn(a) if status != "sel" else "white")),
+                                     customdata=cd, hovertemplate="%{customdata}<extra></extra>"))
+    for tr in fig.data:
+        if tr.legendgroup == "sel":
+            tr.name = f"usada · {'LR' if tr.marker.color == C['lr'] else 'GBDT'}"
+    layout(fig, 24 * len(feats_order) + 120)
+    fig.update_yaxes(autorange="reversed", showgrid=True, tickfont=dict(size=11.5))
+    fig.update_xaxes(side="top", showgrid=False)
+    fig.update_layout(legend=dict(y=-0.02, yanchor="top"))
+    plot(fig, "selmatrix")
+
+    if algo == "lr" and "coefficients" in MA:
+        st.markdown("##### Coeficientes da regressão logística (razão de chances)")
+        terms = pd.DataFrame(MA["coefficients"]["terms"])
+        terms["absc"] = terms["coef"].abs()
+        top = terms.sort_values("absc", ascending=False).head(22).sort_values("coef")
+        lab_terms = [flabel(r.column) + (f" = {F.code_label(r.column, r.category)}" if r.category else "")
+                     + (" (+1 DP)" if r.block == "num" else "") for r in top.itertuples()]
+        fig = go.Figure()
+        fig.add_vline(x=1, line=dict(color=C["muted"], width=1))
+        fig.add_trace(go.Scatter(
+            x=top["odds_ratio"], y=lab_terms, mode="markers",
+            marker=dict(size=10, color=[C["up"] if v > 1 else C["down"] for v in top["odds_ratio"]],
+                        line=dict(width=2, color="white")),
+            hovertemplate="%{y}<br>razão de chances %{x:.2f}<extra></extra>", showlegend=False))
+        for r, yl in zip(top.itertuples(), lab_terms):
+            fig.add_shape(type="line", x0=1, x1=r.odds_ratio, y0=yl, y1=yl, line=dict(color=C["hair"], width=2), layer="below")
+        layout(fig, 26 * len(top) + 90, legend=False)
+        fig.update_xaxes(type="log", title="razão de chances (escala log) — vermelho aumenta, azul reduz a chance")
+        plot(fig, "or")
+        st.caption("Os 22 termos de maior magnitude. Categóricas usam one-hot completo com regularização L2: leia como "
+                   "direção e força relativa dentro da variável, não como efeito causal.")
+    elif algo == "gbdt":
+        note("Modelos de árvores não têm coeficientes. Para ver <b>como</b> cada variável empurra a previsão de um caso, "
+             "use a explicação local no <b>Simulador</b>.", "gray")
+
+    with st.expander("Lista das variáveis escolhidas e ordem de eliminação"):
+        for a in ALGOS:
+            mm = M[a]
+            chips = "".join(f'<span class="feat on">{flabel(f)}</span>' for f in mm["selected_features"])
+            st.markdown(f"**{ALGO_NAME[a]}** — {len(mm['selected_features'])} variáveis<br>{chips}",
+                        unsafe_allow_html=True)
+            order = [f for s_ in mm["selection"]["steps"] for f in s_.get("removed", [])]
+            st.caption("Eliminadas (primeira → última): " + ", ".join(flabel(f) for f in order))
+        excl = {k: v for k, v in S["excluded"].items() if v != "é o alvo"}
+        if excl:
+            st.caption("Excluídas deste cenário: " + "; ".join(f"{flabel(k)} ({v})" for k, v in excl.items()))
+
+# =========================================================================== #
+# 4. ASSOCIAÇÕES (descritivo, dados de treino)
+# =========================================================================== #
+TILE = {"RR": (1, 0), "AP": (3, 0), "AM": (1, 1), "PA": (2, 1), "MA": (3, 1), "CE": (4, 1), "RN": (5, 1),
+        "AC": (0, 2), "RO": (1, 2), "TO": (2, 2), "PI": (3, 2), "PE": (4, 2), "PB": (5, 2),
+        "MT": (1, 3), "GO": (2, 3), "BA": (3, 3), "SE": (4, 3), "AL": (5, 3),
+        "MS": (1, 4), "DF": (2, 4), "MG": (3, 4), "ES": (4, 4),
+        "PR": (1, 5), "SP": (2, 5), "RJ": (3, 5), "SC": (1, 6), "RS": (1, 7)}
+ORDINAL_COLS = {"faixa_etaria", "escolaridade_paciente", "mes_ocorrencia", "dia_semana_ocorrencia", "faixa_horaria",
+                "numero_envolvidos"}
+FAIXA_ORDER = {"madrugada": 0, "manha": 1, "tarde": 2, "noite": 3}
+
+
+def ord_key(var, code):
+    """Ordem natural das categorias ordinais (ignorado sempre por último)."""
+    if code == F.MISSING:
+        return (2, 0.0)
+    if var == "faixa_horaria":
+        return (0, float(FAIXA_ORDER.get(code, 9)))
+    if var == "faixa_etaria":
+        return (0, float(code.split("-")[0].rstrip("+")))
+    k = natural_key(code)
+    return (k[0], k[1])
+
+with tab_assoc:
+    st.caption("Estatísticas descritivas do conjunto de treino — associação não implica causalidade, e notificações "
+               "refletem também quem chega ao serviço de saúde e como a ficha é preenchida.")
+    assoc = pd.DataFrame(S["target_association"])
+    c1, c2 = st.columns(2, gap="large")
+    with c1:
+        a1 = assoc[assoc.measure == "pearson"].copy()
+        a1 = a1.reindex(a1["value"].abs().sort_values(ascending=False).index).head(20).iloc[::-1]
+        fig = go.Figure(go.Bar(
+            x=a1["value"], y=[flabel(f) for f in a1["feature"]], orientation="h", width=0.62,
+            marker=dict(color=[C["up"] if v > 0 else C["down"] for v in a1["value"]], cornerradius=4),
+            hovertemplate="%{y}: r = %{x:.3f}<extra></extra>"))
+        fig.add_vline(x=0, line=dict(color=C["muted"], width=1))
+        layout(fig, 26 * len(a1) + 90, "Correlação com o desfecho · binárias e numéricas", legend=False)
+        fig.update_xaxes(title="correlação (r) · vermelho = mais comum com o desfecho")
+        plot(fig, "assoc_bin")
+    with c2:
+        a2 = assoc[assoc.measure == "cramers_v"].sort_values("value")
+        fig = go.Figure(go.Bar(x=a2["value"], y=[flabel(f) for f in a2["feature"]], orientation="h", width=0.62,
+                               marker=dict(color=C["pos"], cornerradius=4),
+                               hovertemplate="%{y}: V = %{x:.3f}<extra></extra>"))
+        layout(fig, 26 * len(a2) + 90, "Associação com o desfecho · categóricas", legend=False)
+        fig.update_xaxes(title="V de Cramér (0 = nenhuma, 1 = total)")
+        plot(fig, "assoc_cat")
+
+    st.markdown("##### Taxa do desfecho por categoria")
+    rate_vars = [c for c in S["category_rates"]]
+    default_var = "uf_ocorrencia" if "uf_ocorrencia" in rate_vars else rate_vars[0]
+    var = st.selectbox("Variável", rate_vars, index=rate_vars.index(default_var), format_func=flabel, key="rate_var")
+    rr = pd.DataFrame(S["category_rates"][var])
+    prev = S["prevalence_train"]
+    if var == "uf_ocorrencia":
+        c1, c2 = st.columns([1, 1.2], gap="large")
+        with c1:
+            z = np.full((8, 6), np.nan)
+            txt = np.full((8, 6), "", dtype=object)
+            hov = np.full((8, 6), "", dtype=object)
+            for r in rr.itertuples():
+                if r.code in TILE:
+                    cx, cy = TILE[r.code]
+                    z[cy, cx] = r.rate
+                    txt[cy, cx] = f"<b>{r.code}</b><br>{pct(r.rate, 0)}"
+                    hov[cy, cx] = f"{r.code}: {pct(r.rate)} · {br(r.n)} casos"
+            fig = go.Figure(go.Heatmap(
+                z=z, text=txt, texttemplate="%{text}", textfont=dict(size=11), customdata=hov,
+                hovertemplate="%{customdata}<extra></extra>", xgap=4, ygap=4,
+                colorscale=[[i / (len(SEQ) - 1), c] for i, c in enumerate(SEQ)],
+                colorbar=dict(title=dict(text="taxa", side="top"), tickformat=".0%", thickness=10, len=0.6)))
+            layout(fig, 470, "Mapa em mosaico (um quadrado por UF)", legend=False)
+            fig.update_xaxes(visible=False)
+            fig.update_yaxes(visible=False, autorange="reversed", scaleanchor="x")
+            plot(fig, "tilemap")
+        with c2:
+            rrs = rr[rr.code != F.MISSING].sort_values("rate")
+            fig = go.Figure(go.Bar(x=rrs["rate"], y=rrs["code"], orientation="h", width=0.62,
+                                   marker=dict(color=C["pos"], cornerradius=4),
+                                   customdata=[br(n) for n in rrs["n"]],
+                                   hovertemplate="%{y}: %{x:.1%} · %{customdata} casos<extra></extra>"))
+            fig.add_vline(x=prev, line=dict(color=C["muted"], width=1))
+            fig.add_annotation(x=prev, y=1, yref="paper", text=f"média {pct(prev)}", showarrow=False, xanchor="center",
+                               yanchor="bottom", font=dict(size=11, color=C["muted"]))
+            layout(fig, 640, legend=False)
+            fig.update_layout(margin=dict(t=28))
+            fig.update_xaxes(tickformat=".0%")
+            plot(fig, "uf_bars")
     else:
-        st.markdown("""
-        <div class="status-card status-manual">
-            <span class="status-title">Preenchimento Livre Ativo</span>
-            <span class="status-desc">Modo manual ativo. Ajuste os campos para simular hipóteses e cenários sob medida.</span>
-        </div>
-        """, unsafe_allow_html=True)
+        if var in ORDINAL_COLS:
+            rr = rr.iloc[sorted(range(len(rr)), key=lambda i: ord_key(var, rr["code"].iloc[i]))]
+        else:
+            rr = rr.sort_values("rate", ascending=False)
+        labs = [F.code_label(var, c) if F.kind_of(var) != "bin" else ("Sim" if c == "1" else "Não") for c in rr["code"]]
+        fig = go.Figure(go.Bar(x=labs, y=rr["rate"], width=0.6, marker=dict(color=C["pos"], cornerradius=4),
+                               customdata=[br(n) for n in rr["n"]],
+                               text=[pct(v, 0) for v in rr["rate"]], textposition="outside", cliponaxis=False,
+                               hovertemplate="%{x}: %{y:.1%} · %{customdata} casos<extra></extra>"))
+        fig.add_hline(y=prev, line=dict(color=C["muted"], width=1))
+        fig.add_annotation(x=1, xref="paper", y=prev, text=f"média {pct(prev)}", showarrow=False, xanchor="right",
+                           yanchor="bottom", font=dict(size=11, color=C["muted"]))
+        layout(fig, 380, f"{flabel(var)} — taxa de {SHORT.lower()}", legend=False)
+        fig.update_yaxes(tickformat=".0%", rangemode="tozero")
+        plot(fig, "rate_bars")
 
-    input_df = pd.DataFrame([{
-        "idade_paciente": idade, "numero_envolvidos": num_env, "dia_semana_ocorrencia": str(dia_semana),
-        "uf_ocorrencia": uf, "raca_paciente": raca, "escolaridade_paciente": escolaridade,
-        "estado_civil_paciente": estado_civil, "autor_sexo": autor_sexo, "ocorreu_noite_madrugada": noite,
-        "reside_municipio_ocorrencia": mesmo_mun, "local_residencia": casa, "gestante": gestante,
-        "possui_deficiencia": deficiencia, "violencia_fisica": int(v_fisica), "violencia_psicologica": int(v_psico),
-        "violencia_sexual": int(v_sexual), "violencia_financeira": int(v_financ), "violencia_negligencia": int(v_neglig),
-        "violencia_tortura": int(v_tortura), "meio_forca_corporal": int(m_forca), "meio_enforcamento": int(m_enforcamento),
-        "meio_objeto_contundente": int(m_contundente), "meio_objeto_perfurante": int(m_perfurante),
-        "meio_arma_fogo": int(m_arma), "meio_ameaca": int(m_ameaca), "autor_alcoolizado": alcool
-    }])
+    with st.expander("Matriz de correlação completa (binárias e numéricas)"):
+        cm = S["full_correlation_matrix"]
+        dfc = pd.DataFrame(cm["data"], columns=cm["columns"], index=cm["index"])
+        arr = dfc.to_numpy(dtype=float)
+        arr[np.triu(np.ones_like(arr, dtype=bool), k=0)] = np.nan
+        names = [F.short_label(c) for c in dfc.columns]
+        lim = float(np.nanmax(np.abs(arr)))
+        fig = go.Figure(go.Heatmap(
+            z=arr, x=names, y=names, zmid=0, zmin=-lim, zmax=lim,
+            colorscale=[[0, "#184f95"], [0.25, "#6da7ec"], [0.5, C["mid"]], [0.75, "#ee8c8b"], [1, "#b72d2d"]],
+            hovertemplate="%{y} × %{x}: %{z:.2f}<extra></extra>", xgap=1, ygap=1,
+            colorbar=dict(thickness=10, len=0.5, title=dict(text="r", side="top"))))
+        layout(fig, 760, legend=False)
+        fig.update_yaxes(autorange="reversed", tickfont=dict(size=10.5))
+        fig.update_xaxes(tickangle=-50, tickfont=dict(size=10.5))
+        plot(fig, "corr")
+        st.caption("Escala divergente centrada em zero: vermelho = ocorrem juntos com mais frequência; azul = raramente "
+                   "juntos. Apenas o triângulo inferior, sem a diagonal.")
 
-    if st.button("Executar Inferência", type="primary", use_container_width=True):
-        prob = active_model.predict_proba(input_df)[0][1]
-        pred_label = 1 if prob >= 0.5 else 0
-        
-        st.markdown("---")
-        rc1, rc2, rc3 = st.columns([1, 2, 1])
-        with rc1:
-            st.metric(
-                label=f"Probabilidade ({selected_algo})",
-                value=f"{prob * 100:.1f}%",
-                delta="Alto Risco" if prob >= 0.5 else "Baixo Risco",
-                delta_color="inverse" if prob >= 0.5 else "normal"
-            )
-        with rc2:
-            if pred_label == 1:
-                st.error(f"Alerta: Padrão estatístico compatível com {selected_theme}.")
+# =========================================================================== #
+# 5. EQUIDADE
+# =========================================================================== #
+GROUP_NAMES = {"raca_paciente": "Raça/cor", "faixa_etaria": "Faixa etária", "regiao_ocorrencia": "Região"}
+with tab_fair:
+    st.markdown(f"##### Desempenho por subgrupo · {ALGO_NAME[algo]}")
+    st.caption("Mesmo limiar para todos os grupos. Diferenças grandes de sensibilidade ou de falso positivo indicam que o "
+               "modelo erra mais para alguns grupos — algo a reportar em qualquer uso do modelo.")
+    gsel = None
+    if hasattr(st, "segmented_control"):
+        gsel = st.segmented_control("Grupo", list(GROUP_NAMES), format_func=GROUP_NAMES.get, default="raca_paciente",
+                                    key="gsel", label_visibility="collapsed")
+    gsel = gsel or "raca_paciente"
+    sg = pd.DataFrame(MA["subgroups"].get(gsel, []))
+    if sg.empty:
+        st.info("Sem subgrupos com tamanho suficiente.")
+    else:
+        if gsel == "faixa_etaria":
+            sg = sg.iloc[sorted(range(len(sg)), key=lambda i: ord_key("faixa_etaria", sg["group"].iloc[i]))]
+        sg["lab"] = [F.code_label(gsel, g) for g in sg["group"]]
+        t = MA["test"]
+        overall = {"auc": t["roc_auc"], "recall": t["report"]["1"]["recall"],
+                   "fpr": 1 - t["report"]["0"]["recall"], "precision": t["report"]["1"]["precision"]}
+        panels = [("auc", "AUC"), ("recall", "Sensibilidade"), ("fpr", "Taxa de falso positivo"), ("calib", "Calibração")]
+        fig = make_subplots(rows=1, cols=4, shared_yaxes=True, horizontal_spacing=0.035,
+                            subplot_titles=[p[1] for p in panels])
+        for j, (k, _) in enumerate(panels, start=1):
+            if k == "calib":
+                fig.add_trace(go.Scatter(x=sg["prevalence"], y=sg["lab"], mode="markers", name="taxa real",
+                                         marker=dict(size=10, color=C["pos"], line=dict(width=2, color="white")),
+                                         customdata=[br(n) for n in sg["n"]],
+                                         hovertemplate="%{y}: real %{x:.1%} · %{customdata} casos<extra></extra>"),
+                              row=1, col=j)
+                fig.add_trace(go.Scatter(x=sg["mean_pred"], y=sg["lab"], mode="markers", name="média prevista",
+                                         marker=dict(size=10, color=C[algo], symbol="diamond",
+                                                     line=dict(width=2, color="white")),
+                                         hovertemplate="%{y}: previsto %{x:.1%}<extra></extra>"), row=1, col=j)
+                fig.update_xaxes(tickformat=".0%", row=1, col=j)
             else:
-                st.success(f"Classificação abaixo do limiar crítico para {selected_theme}.")
-                
-        with rc3:
-            # A validação histórica só é acionada se o caso real não tiver sido modificado
-            if is_sample and len(campos_alterados) == 0:
-                real_val = sample_val["target_real"]
-                acertou = pred_label == real_val
-                st.metric(
-                    label="Desfecho Real do Caso",
-                    value="Positivo (1)" if real_val == 1 else "Negativo (0)",
-                    delta="Acerto do Modelo" if acertou else "Erro de Classificação",
-                    delta_color="normal" if acertou else "inverse"
-                )
-            else:
-                st.metric(
-                    label="Tipo de Entrada",
-                    value="Simulação Livre",
-                    delta="Dados Customizados" if is_sample else "Sem Histórico Real",
-                    delta_color="off"
-                )
+                fig.add_trace(go.Scatter(x=sg[k], y=sg["lab"], mode="markers", showlegend=False,
+                                         marker=dict(size=11, color=C[algo], line=dict(width=2, color="white")),
+                                         customdata=[br(n) for n in sg["n"]],
+                                         hovertemplate="%{y}: %{x:.3f} · %{customdata} casos<extra></extra>"),
+                              row=1, col=j)
+                fig.add_vline(x=overall[k], line=dict(color=C["muted"], width=1), row=1, col=j)
+                fig.update_xaxes(tickformat=".2f" if k == "auc" else ".0%", row=1, col=j)
+        layout(fig, 70 + 44 * len(sg))
+        fig.update_layout(legend=dict(y=-0.12, yanchor="top", orientation="h"), margin=dict(t=40))
+        fig.update_yaxes(autorange="reversed")
+        plot(fig, "fair")
+        st.caption("Linha cinza = valor no teste inteiro. No painel de calibração, círculo = taxa real e losango = "
+                   "probabilidade média prevista; quanto mais próximos, melhor calibrado o modelo para o grupo.")
+        if gsel in MA["selected_features"]:
+            note(f"<b>{GROUP_NAMES[gsel]}</b> é uma das variáveis usadas por este modelo. Para um uso sensível, vale "
+                 "comparar com um modelo treinado sem ela (no notebook, adicione-a às exclusões).", "warn")
+        tbl = sg[["lab", "n", "prevalence", "mean_pred", "auc", "recall", "fpr", "precision"]].rename(columns={
+            "lab": "Grupo", "n": "Casos (teste)", "prevalence": "Taxa real", "mean_pred": "Média prevista",
+            "auc": "AUC", "recall": "Sensibilidade", "fpr": "Falso positivo", "precision": "Precisão"}).set_index("Grupo")
+        with st.expander("Tabela"):
+            table(tbl.style.format({"Casos (teste)": lambda v: br(v), "Taxa real": "{:.1%}", "Média prevista": "{:.1%}",
+                                    "AUC": "{:.3f}", "Sensibilidade": "{:.1%}", "Falso positivo": "{:.1%}",
+                                    "Precisão": "{:.1%}"}))
 
-        if m_arma or m_enforcamento:
-            st.warning(
-                "Atenção - Risco Crítico de Letalidade: "
-                "O emprego de arma de fogo ou asfixia é o maior preditor isolado de feminicídio. "
-                "Em bases hospitalares como o SINAN, a letalidade imediata tende a truncar o histórico ambulatorial, "
-                "gerando uma probabilidade de reincidência contraintuitivamente menor devido ao viés de sobrevivência."
-            )
+# =========================================================================== #
+# 6. SIMULADOR
+# =========================================================================== #
+with tab_sim:
+    samples = SAMPLES.get(scen_label, [])
+    ref = S["reference_profile"]
+    used_by = {c: [a for a in ALGOS if c in M[a]["raw_inputs"]] for c in F.RAW_COLS}
+    hidden = set(F.VINCULO_COLS) if SLUG == "autor_parceiro_ou_ex" else set()
+    hidden.add(SLUG)
+
+    def case_label(i):
+        if i == 0:
+            return "Preenchimento livre (perfil mais comum)"
+        s_ = samples[i - 1]
+        uf = s_.get("uf_ocorrencia") or "–"
+        return (f"Caso real #{i} · {s_.get('ano', '')} · {uf} · {int(s_['idade_paciente'] or 0)} anos · "
+                f"desfecho registrado: {'sim' if s_['target_real'] == 1 else 'não'}")
+
+    case_idx = st.selectbox("Carregar um caso do conjunto de teste (não visto no treino) ou preencher livremente",
+                            range(len(samples) + 1), format_func=case_label, key=f"case_{SLUG}")
+    case = samples[case_idx - 1] if case_idx > 0 else None
+    base = {c: (case.get(c) if case else ref.get(c)) for c in F.RAW_COLS}
+    if not case:
+        base["hora_ocorrencia_h"] = None
+
+    def wkey(c):
+        return f"w_{SLUG}_{case_idx}_{c}"
+
+    def help_for(c):
+        u = used_by.get(c, [])
+        return "Usado por: " + (" e ".join(ALGO_TAG[a] for a in u) if u else "nenhum modelo deste cenário")
+
+    def widget(c, container):
+        v = base.get(c)
+        k = F.kind_of(c)
+        lab = flabel(c) + (" ●" if used_by.get(c) else "")
+        if c == "idade_paciente":
+            return container.number_input(lab, 14, 110, int(v if v is not None else 30), key=wkey(c), help=help_for(c))
+        if c == "numero_envolvidos":
+            opts = [1.0, 2.0, None]
+            cur = v if v in (1.0, 2.0) else None
+            return container.selectbox(lab, opts, index=opts.index(cur), key=wkey(c), help=help_for(c),
+                                       format_func=lambda x: {1.0: "Um", 2.0: "Dois ou mais"}.get(x, "Ignorado"))
+        if c == "hora_ocorrencia_h":
+            opts = [None] + [float(h) for h in range(24)]
+            cur = float(v) if v is not None and not (isinstance(v, float) and np.isnan(v)) else None
+            return container.selectbox(lab, opts, index=opts.index(cur), key=wkey(c), help=help_for(c),
+                                       format_func=lambda x: "Não informada" if x is None else f"{int(x):02d}h")
+        if k == "cat":
+            opts = sorted(S["categories"].get(c, [F.MISSING]), key=natural_key)
+            cur = F.normalize_code(v)
+            if cur not in opts:
+                opts.append(cur)
+            return container.selectbox(lab, opts, index=opts.index(cur), key=wkey(c), help=help_for(c),
+                                       format_func=lambda x, c=c: F.code_label(c, x))
+        return int(container.checkbox(lab, value=bool(v), key=wkey(c), help=help_for(c)))
+
+    used_cols = [c for c in F.RAW_COLS if used_by.get(c) and c not in hidden]
+    other_cols = [c for c in F.RAW_COLS if not used_by.get(c) and c not in hidden]
+    st.caption("● = campo usado por pelo menos um dos modelos deste cenário (passe o mouse no ícone de ajuda para ver "
+               "qual). Os demais ficam no fim e não alteram as previsões.")
+    vals = {}
+    groups_form = [("Vítima", ["idade_paciente", "raca_paciente", "escolaridade_paciente", "estado_civil_paciente",
+                               "gestante", "possui_deficiencia"]),
+                   ("Quando e onde", ["hora_ocorrencia_h", "dia_semana_ocorrencia", "mes_ocorrencia", "uf_ocorrencia",
+                                      "local_ocorrencia_cod", "reside_municipio_ocorrencia", "ocorrencia_antiga"]),
+                   ("Agressor", ["autor_sexo", "numero_envolvidos", "autor_alcoolizado", *F.VINCULO_COLS]),
+                   ("Violência e meios", F.VIOLENCIA_COLS + F.MEIO_COLS)]
+    cols = st.columns(4, gap="medium")
+    for (gname, gcols), col in zip(groups_form, cols):
+        col.markdown(f"**{gname}**")
+        for c in gcols:
+            if c in used_cols:
+                vals[c] = widget(c, col)
+    with st.expander("Campos não usados pelos modelos deste cenário"):
+        oc = st.columns(4)
+        for i, c in enumerate(other_cols):
+            vals[c] = widget(c, oc[i % 4])
+    for c in F.RAW_COLS:
+        if c not in vals:
+            vals[c] = base.get(c)
+
+    # Estado do caso
+    def same(a_, b_):
+        na_, nb_ = F.normalize_code(a_), F.normalize_code(b_)
+        return na_ == nb_
+
+    changed = [flabel(c) for c in F.RAW_COLS if case and c not in hidden and not same(vals[c], case.get(c))]
+    if case and not changed:
+        note(f"<b>Caso real carregado.</b> Registro do conjunto de teste, não usado no treino. Desfecho registrado no "
+             f"SINAN: <b>{'sim' if case['target_real'] == 1 else 'não'}</b>.")
+    elif case:
+        note(f"<b>Caso modificado — agora é uma simulação.</b> Você alterou: {', '.join(changed)}. A comparação com o "
+             "desfecho real foi desativada.", "warn")
+    else:
+        note("<b>Preenchimento livre.</b> Os campos começam no perfil mais comum do treino; ajuste para simular "
+             "hipóteses.", "gray")
+
+    row = pd.DataFrame([vals])[F.RAW_COLS]
+    probs = {a: float(load_model(M[a]["file"]).predict_proba(row)[0, 1]) for a in ALGOS}
+
+    st.markdown("##### Resultado")
+    pc = st.columns(2, gap="medium")
+    for a, col in zip(ALGOS, pc):
+        p, t_ = probs[a], M[a]["threshold"]
+        above = p >= t_
+        verdict = ""
+        if case and not changed:
+            ok = int(above) == case["target_real"]
+            verdict = f" · {'acertou' if ok else 'errou'} o desfecho real"
+        col.markdown(f"""
+<div class="pred {'sel' if a == algo else ''}" style="border-color:{C[a] if a == algo else C['hair']}">
+  <div class="top"><span class="name"><span class="key" style="background:{C[a]}"></span>{ALGO_NAME[a]}</span>
+    <span class="cls">{'acima' if above else 'abaixo'} do limiar ({pct(t_, 0)}){verdict}</span></div>
+  <div class="p">{pct(p)}</div>
+  <div class="bullet" style="color:{C[a]}">
+    <div class="fill" style="width:{100 * p:.1f}%; background:{C[a]}"></div>
+    <div class="thr" style="left:calc({100 * t_:.1f}% - 1px)"></div>
+    <div class="prev" style="left:calc({100 * S['prevalence_test']:.1f}% - 1px)"></div>
+  </div>
+  <div class="legend-mini"><span>▮ probabilidade prevista</span><span>| limiar</span>
+    <span style="color:{C['muted']}">| prevalência no teste ({pct(S['prevalence_test'], 0)})</span></div>
+</div>""", unsafe_allow_html=True)
+
+    if vals.get("meio_arma_fogo") or vals.get("meio_enforcamento"):
+        note("<b>Atenção — marcadores de risco de letalidade.</b> Arma de fogo e asfixia/enforcamento estão entre os "
+             "principais sinais de risco de feminicídio. Em bases de atendimento como o SINAN, casos fatais muitas vezes "
+             "não chegam a gerar histórico, o que pode deixar a probabilidade de reincidência contraintuitivamente baixa "
+             "(viés de sobrevivência).", "warn")
+
+    sim_a = st.container()
+    with sim_a:
+        # Contribuição local: p(caso) − p(caso com o campo no valor mais comum)
+        inputs = [c for c in M[algo]["raw_inputs"] if c not in hidden]
+        refv = dict(ref)
+        refv["hora_ocorrencia_h"] = None
+        alt_rows, alt_cols = [], []
+        for c in inputs:
+            if not same(vals[c], refv.get(c)):
+                r_ = dict(vals)
+                r_[c] = refv.get(c)
+                alt_rows.append(r_)
+                alt_cols.append(c)
+        st.markdown(f"**O que mais pesou neste caso** · {ALGO_NAME[algo]}")
+        if alt_rows:
+            pa = load_model(M[algo]["file"]).predict_proba(pd.DataFrame(alt_rows)[F.RAW_COLS])[:, 1]
+            contrib = pd.DataFrame({"col": alt_cols, "delta": probs[algo] - pa})
+            contrib = contrib[contrib["delta"].abs() >= 0.0005]
+            contrib = contrib.reindex(contrib["delta"].abs().sort_values(ascending=False).index).head(10).iloc[::-1]
+
+            def _desc(c):
+                v = vals[c]
+                if F.kind_of(c) == "bin":
+                    return f"{flabel(c)}: {'sim' if v else 'não'}"
+                if c == "hora_ocorrencia_h":
+                    return f"Hora: {'não informada' if v is None else f'{int(v):02d}h'}"
+                if c == "idade_paciente":
+                    return f"Idade: {int(v)} anos"
+                if c == "numero_envolvidos":
+                    return f"Nº de agressores: {F.code_label(c, v)}"
+                return f"{flabel(c)}: {F.code_label(c, v)}"
+
+            lo, hi = min(contrib["delta"].min(), 0), max(contrib["delta"].max(), 0)
+            pad = 0.18 * max(hi - lo, 0.01)
+            fig = go.Figure(go.Bar(
+                x=contrib["delta"], y=[_desc(c) for c in contrib["col"]], orientation="h", width=0.62,
+                marker=dict(color=[C["up"] if v > 0 else C["down"] for v in contrib["delta"]], cornerradius=4),
+                text=[("+" if v > 0 else "−") + br(abs(100 * v), 1) + " p.p." for v in contrib["delta"]],
+                textposition="outside", cliponaxis=False,
+                hovertemplate="%{y}<br>%{x:+.1%} em relação ao valor mais comum<extra></extra>"))
+            fig.add_vline(x=0, line=dict(color=C["muted"], width=1))
+            layout(fig, 34 * len(contrib) + 70, legend=False)
+            fig.update_xaxes(tickformat="+.0%", title="efeito na probabilidade", range=[lo - pad, hi + pad])
+            fig.update_layout(margin=dict(r=24))
+            plot(fig, "contrib")
+            st.caption("Vermelho aumenta e azul reduz a probabilidade. Cada barra mostra quanto ela mudaria se apenas "
+                       "aquele campo voltasse ao valor mais comum no treino; campos que já estão no valor mais comum "
+                       "não aparecem.")
+        else:
+            st.info("Todos os campos usados pelo modelo estão no valor mais comum do treino.")
+    with st.container():
+        # "E se...?": varia um campo e mantém os demais fixos
+        wi_opts = [c for c in F.RAW_COLS if used_by.get(c) and c not in hidden]
+        if wi_opts:
+            wi_default = "idade_paciente" if "idade_paciente" in wi_opts else wi_opts[0]
+            wi = st.selectbox("**E se…?** Varie um campo (os demais ficam como estão)", wi_opts,
+                              index=wi_opts.index(wi_default), format_func=flabel, key=f"whatif_{SLUG}")
+            kind = F.kind_of(wi)
+            if wi == "idade_paciente":
+                xs = [float(x) for x in range(14, 81)]
+            elif wi == "hora_ocorrencia_h":
+                xs = [None] + [float(h) for h in range(24)]
+            elif wi == "numero_envolvidos":
+                xs = [1.0, 2.0, None]
+            elif kind == "cat":
+                xs = sorted(S["categories"].get(wi, []), key=lambda c_: ord_key(wi, c_))
+            else:
+                xs = [0, 1]
+            grid = pd.DataFrame([dict(vals, **{wi: x}) for x in xs])[F.RAW_COLS]
+            preds = {a: load_model(M[a]["file"]).predict_proba(grid)[:, 1] for a in ALGOS}
+            fig = go.Figure()
+            if wi == "idade_paciente":
+                for a in ALGOS:
+                    fig.add_trace(go.Scatter(x=xs, y=preds[a], mode="lines", line=dict(color=C[a], width=2),
+                                             name=ALGO_NAME[a],
+                                             hovertemplate="%{x} anos: %{y:.1%}<extra>" + ALGO_TAG[a] + "</extra>"))
+                    fig.add_trace(go.Scatter(x=[vals[wi]], y=[probs[a]], mode="markers", showlegend=False,
+                                             marker=dict(size=10, color=C[a], line=dict(width=2, color="white")),
+                                             hoverinfo="skip"))
+                fig.update_xaxes(title="idade da vítima")
+            else:
+                if wi == "hora_ocorrencia_h":
+                    labs = ["n/i" if x is None else f"{int(x)}h" for x in xs]
+                elif kind == "bin":
+                    labs = ["Não", "Sim"]
+                else:
+                    labs = [F.code_label(wi, x) for x in xs]
+                cur = F.normalize_code(vals[wi])
+                for a in ALGOS:
+                    fig.add_trace(go.Bar(
+                        x=labs, y=preds[a], name=ALGO_NAME[a], marker=dict(color=C[a], cornerradius=4,
+                        opacity=[1.0 if F.normalize_code(x) == cur else 0.45 for x in xs]),
+                        hovertemplate="%{x}: %{y:.1%}<extra>" + ALGO_TAG[a] + "</extra>"))
+                fig.update_layout(barmode="group", bargap=0.35, bargroupgap=0.08)
+                fig.update_xaxes(tickangle=-35 if len(xs) > 8 else 0)
+            layout(fig, 340)
+            fig.update_yaxes(tickformat=".0%", title="probabilidade prevista", rangemode="tozero")
+            plot(fig, f"whatif_{wi}")
+            unused = [ALGO_TAG[a] for a in ALGOS if wi not in M[a]["raw_inputs"]]
+            st.caption("Barras opacas = valor atual. "
+                       + (f"O {unused[0]} não usa este campo — por isso não varia." if unused else ""))
+
+# =========================================================================== #
+# 7. METODOLOGIA
+# =========================================================================== #
+with tab_meth:
+    cfg = META.get("config", {})
+    st.markdown(f"""
+#### Dados
+- **Fonte:** `basedosdados.br_ms_sinan.microdados_violencia` (SINAN/DATASUS via Base dos Dados), consulta `query_violencia_v3.sql`.
+- **Recorte:** vítimas do sexo feminino, 14 anos ou mais, violência **não autoprovocada**; {br(META['n_rows_csv'])} notificações de {yrs[0]} a {yrs[1]}.
+- **Códigos:** a base usa os códigos originais do SINAN (1 = sim, 2 = não, 9 = ignorado). "Ignorado" é mantido como categoria própria — não é contado como "não".
+- **Lacunas conhecidas:** 2013 e 2014 estão incompletos no reprocessamento atual da Base dos Dados; o campo de encaminhamento à DEAM só existe a partir de 2015 (mudança da ficha), então esse cenário usa 2015 em diante.
+
+#### Variáveis
+- **{len(F.ALL_CANDIDATES)} candidatas:** {len(F.RAW_COLS)} campos da ficha + {len(F.DERIVED_COLS)} derivadas ({', '.join(flabel(c).lower() for c in F.DERIVED_COLS)}).
+- **Excluídas por vazamento:** os outros encaminhamentos (decisões do mesmo atendimento) em todos os cenários; o vínculo do agressor no cenário "Agressor íntimo", porque é o próprio alvo.
+- **Normalização** dentro do pipeline (`features.prepare_features`): o app envia a linha crua e o modelo trata códigos como `4`, `"4"` ou `"4.0"` da mesma forma — isso corrige o bug da v2, em que raça, escolaridade e situação conjugal eram ignoradas no simulador.
+
+#### Seleção de variáveis
+- Para **cada algoritmo em cada cenário**: eliminação recursiva guiada por **importância de permutação** (queda de AUC) numa validação interna ({br(cfg.get('sel_fit', 0))} linhas de ajuste, {br(cfg.get('sel_val', 0))} de validação).
+- Escolha do **menor subconjunto** com AUC ≥ melhor AUC − 1 erro-padrão (Hanley & McNeil) — a regra de 1 EP prefere o modelo mais simples quando a diferença não é distinguível do ruído.
+
+#### Modelos e avaliação
+- **Regressão logística** (mediana + padronização, one-hot) e **HistGradientBoosting** (categóricas nativas, early stopping).
+- Sem pesos de classe: probabilidades calibradas. **Limiar** escolhido na validação pelo índice de Youden; ajustável na aba Desempenho.
+- Divisão **80/20 estratificada** (`random_state=42`); 15% do treino separados para validação. O teste não participa de nenhuma escolha.
+- **Validação temporal:** treino até {cfg.get('temporal_corte', 2021)} e teste nos anos seguintes.
+- **Baseline:** a configuração v2 retreinada nos mesmos dados e na mesma divisão.
+
+#### Limitações e uso responsável
+- Notificação ≠ ocorrência: o SINAN registra os casos que chegam aos serviços de saúde, com subnotificação desigual entre regiões, grupos e períodos.
+- Os modelos aprendem padrões de **registro** (incluindo práticas de preenchimento e de encaminhamento), não causas.
+- Probabilidades se referem a perfis estatísticos; **não** são avaliação de risco de uma pessoa e não devem orientar decisões sobre casos individuais.
+- Atributos sensíveis (raça/cor, idade, região) podem ser usados pelos modelos — veja a aba **Equidade** antes de qualquer uso aplicado.
+""")
+    with st.expander("Configuração do treino"):
+        st.json(cfg)
+
+st.markdown('<div class="footer">Precisa de ajuda ou conhece alguém em situação de violência? <b>Ligue 180</b> — '
+            'Central de Atendimento à Mulher (gratuito, 24h). Em emergência, <b>190</b>.</div>', unsafe_allow_html=True)
