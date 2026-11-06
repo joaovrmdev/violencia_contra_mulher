@@ -741,7 +741,7 @@ with tab_assoc:
     with st.expander("Matriz de correlação completa (binárias e numéricas)"):
         cm = S["full_correlation_matrix"]
         dfc = pd.DataFrame(cm["data"], columns=cm["columns"], index=cm["index"])
-        arr = dfc.to_numpy(dtype=float)
+        arr = dfc.to_numpy(dtype=float, copy=True)  # pandas 3 (copy-on-write) devolve view só-leitura
         arr[np.triu(np.ones_like(arr, dtype=bool), k=0)] = np.nan
         names = [F.short_label(c) for c in dfc.columns]
         lim = float(np.nanmax(np.abs(arr)))
