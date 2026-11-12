@@ -45,8 +45,59 @@ SCEN_INFO = {
 }
 FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 
+# Cards de vidro: translúcidos, com reflexo diagonal e sombra; afundam no hover.
+GLASS = """
+  position:relative;
+  background:
+    linear-gradient(122deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.22) 26%, rgba(255,255,255,0) 48%),
+    linear-gradient(180deg, rgba(255,255,255,.48), rgba(255,255,255,.20));
+  border:1px solid rgba(255,255,255,.88);
+  border-bottom-color: rgba(255,255,255,.38);
+  border-radius:16px;
+  box-shadow:
+    0 18px 34px -18px rgba(38,34,74,.38),
+    0 3px 8px -2px rgba(38,34,74,.08),
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(38,34,74,.05);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  transition: transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s ease, background .2s ease;
+"""
+GLASS_PRESSED = """
+  transform: translateY(2px) scale(.985);
+  background:
+    linear-gradient(122deg, rgba(255,255,255,.46) 0%, rgba(255,255,255,.10) 26%, rgba(255,255,255,0) 48%),
+    linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.16));
+  box-shadow:
+    0 4px 10px -6px rgba(38,34,74,.32),
+    inset 0 3px 12px rgba(38,34,74,.13),
+    inset 0 1px 0 rgba(255,255,255,.5);
+"""
+
 st.markdown(f"""
 <style>
+  .stApp {{
+    background:
+      radial-gradient(900px 620px at 0% 0%, rgba(98,80,214,.20), transparent 64%),
+      radial-gradient(820px 560px at 100% 0%, rgba(42,120,214,.15), transparent 62%),
+      radial-gradient(760px 620px at 28% 62%, rgba(98,80,214,.08), transparent 64%),
+      radial-gradient(900px 700px at 78% 100%, rgba(235,104,52,.12), transparent 64%),
+      #f2f1ed !important;
+    background-attachment: fixed !important;
+  }}
+  [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stBottomBlockContainer"] {{
+    background: transparent !important; }}
+  header[data-testid="stHeader"] {{ background: rgba(243,242,238,.55) !important;
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }}
+  section[data-testid="stSidebar"] {{ background: rgba(239,238,233,.62) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%);
+    border-right: 1px solid rgba(255,255,255,.7); }}
+  .tile, .cm .cell, .pred, .note {{ {GLASS} }}
+  .tile:hover, .cm .cell:hover, .pred:hover {{ {GLASS_PRESSED} }}
+  @media (prefers-reduced-motion: reduce) {{
+    .tile, .cm .cell, .pred {{ transition: none; }}
+    .tile:hover, .cm .cell:hover, .pred:hover {{ transform: none; }}
+  }}
   .block-container {{ padding-top: 3.4rem; max-width: 1320px; }}
   .ct {{ font-weight: 650; font-size: .98rem; margin: .5rem 0 0; }}
   .ct-sub {{ font-size: .8rem; opacity: .7; margin: 0 0 -.3rem; }}
@@ -58,28 +109,31 @@ st.markdown(f"""
   .chip {{ font-size:.78rem; padding:.18rem .6rem; border-radius:999px; border:1px solid {C['hair']};
            opacity:.9; white-space:nowrap; }}
   .chip b {{ font-weight:600; }}
-  .tiles {{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: .4rem 0 1rem; }}
-  .tile {{ border:1px solid {C['hair']}; border-radius:12px; padding:14px 16px; background:rgba(127,127,127,.03); }}
+  .tiles {{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: .5rem 0 1.1rem; }}
+  .tile {{ padding:15px 18px; }}
   .tile .lab {{ font-size:.8rem; opacity:.72; }}
   .tile .val {{ font-size:1.65rem; font-weight:650; line-height:1.25; margin-top:2px; }}
   .tile .sub {{ font-size:.78rem; opacity:.68; margin-top:2px; }}
   .tile .delta-up {{ color:#0b8a0b; font-weight:600; }}
   .tile .delta-down {{ color:#c23a3a; font-weight:600; }}
   .key {{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:baseline; }}
-  .cm {{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }}
-  .cm .cell {{ border:1px solid {C['hair']}; border-radius:12px; padding:12px 14px; background:rgba(127,127,127,.03); }}
-  .cm .cell .t {{ font-size:.76rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; opacity:.75; }}
-  .cm .cell .v {{ font-size:1.45rem; font-weight:650; }}
+  .cm {{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:10px; }}
+  .cm .cell {{ padding:14px 16px; }}
+  .cm .cell .t {{ font-size:.82rem; font-weight:600; opacity:.8; display:flex; align-items:center; gap:7px; }}
+  .cm .cell .t::before {{ content:""; width:8px; height:8px; border-radius:50%; flex:none;
+                          box-shadow: 0 0 0 3px rgba(255,255,255,.7); }}
+  .cm .ok .t::before {{ background:#1baf7a; }}
+  .cm .err .t::before {{ background:#e34948; }}
+  .cm .cell .v {{ font-size:1.5rem; font-weight:650; margin-top:2px; }}
   .cm .cell .d {{ font-size:.76rem; opacity:.68; }}
-  .cm .ok {{ border-left:4px solid #1baf7a; }}
-  .cm .err {{ border-left:4px solid #e34948; }}
-  .note {{ border:1px solid {C['hair']}; border-left:4px solid {C['pos']}; border-radius:10px; padding:10px 14px;
-           font-size:.9rem; margin:.4rem 0 .8rem; background:rgba(98,80,214,.05); }}
-  .note.warn {{ border-left-color:#eda100; background:rgba(237,161,0,.07); }}
-  .note.gray {{ border-left-color:{C['muted']}; background:rgba(127,127,127,.04); }}
+  .note {{ border-radius:14px; padding:11px 16px 11px 34px; font-size:.9rem; margin:.4rem 0 .8rem; }}
+  .note::before {{ content:""; position:absolute; left:15px; top:calc(11px + .8em - 4px); width:8px; height:8px; border-radius:50%;
+                   background:{C['pos']}; box-shadow: 0 0 0 3px rgba(255,255,255,.7); }}
+  .note.warn::before {{ background:#eda100; }}
+  .note.gray::before {{ background:{C['muted']}; }}
   .note b {{ font-weight:650; }}
-  .pred {{ border:1px solid {C['hair']}; border-radius:12px; padding:14px 16px; background:rgba(127,127,127,.03); }}
-  .pred.sel {{ border-width:2px; }}
+  .pred {{ padding:16px 18px; }}
+  .pred.sel {{ border:1.5px solid var(--accent); }}
   .pred .top {{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }}
   .pred .name {{ font-size:.85rem; font-weight:600; }}
   .pred .p {{ font-size:2rem; font-weight:700; line-height:1.1; }}
@@ -150,7 +204,8 @@ def layout(fig, height=360, title=None, legend=True, **kw):
         margin=dict(l=10, r=16, t=12, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, xanchor="left", title=None,
                     font=dict(size=12)) if legend else None,
-        showlegend=legend, hoverlabel=dict(font=dict(family=FONT)), **kw)
+        showlegend=legend, hoverlabel=dict(font=dict(family=FONT)),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", **kw)
     return fig
 
 
@@ -931,7 +986,7 @@ with tab_sim:
             ok = int(above) == case["target_real"]
             verdict = f" · {'acertou' if ok else 'errou'} o desfecho real"
         col.markdown(f"""
-<div class="pred {'sel' if a == algo else ''}" style="border-color:{C[a] if a == algo else C['hair']}">
+<div class="pred {'sel' if a == algo else ''}" style="--accent:{C[a]}">
   <div class="top"><span class="name"><span class="key" style="background:{C[a]}"></span>{ALGO_NAME[a]}</span>
     <span class="cls">{'acima' if above else 'abaixo'} do limiar ({pct(t_, 0)}){verdict}</span></div>
   <div class="p">{pct(p)}</div>
