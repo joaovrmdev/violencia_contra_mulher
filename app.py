@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 
 import features as F
@@ -45,53 +46,28 @@ SCEN_INFO = {
 }
 FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 
-# Cards de vidro: translúcidos, com reflexo diagonal e sombra; afundam no hover.
+# Cards espelhados: brancos translúcidos, com reflexo diagonal e sombra suave; afundam no hover.
 GLASS = """
   position:relative;
-  background:
-    linear-gradient(122deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.22) 26%, rgba(255,255,255,0) 48%),
-    linear-gradient(180deg, rgba(255,255,255,.48), rgba(255,255,255,.20));
-  border:1px solid rgba(255,255,255,.88);
-  border-bottom-color: rgba(255,255,255,.38);
-  border-radius:16px;
+  background: linear-gradient(125deg, rgba(255,255,255,1) 0%, rgba(255,255,255,.86) 40%, rgba(255,255,255,.58) 100%);
+  border:1px solid rgba(24,24,48,.07);
+  border-radius:14px;
   box-shadow:
-    0 18px 34px -18px rgba(38,34,74,.38),
-    0 3px 8px -2px rgba(38,34,74,.08),
-    inset 0 1px 0 rgba(255,255,255,.95),
-    inset 0 -1px 0 rgba(38,34,74,.05);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
-  backdrop-filter: blur(18px) saturate(180%);
+    0 12px 26px -16px rgba(30,30,60,.28),
+    0 2px 6px -2px rgba(30,30,60,.06),
+    inset 0 1px 0 #fff;
   transition: transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s ease, background .2s ease;
 """
 GLASS_PRESSED = """
-  transform: translateY(2px) scale(.985);
-  background:
-    linear-gradient(122deg, rgba(255,255,255,.46) 0%, rgba(255,255,255,.10) 26%, rgba(255,255,255,0) 48%),
-    linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.16));
+  transform: translateY(2px) scale(.988);
+  background: linear-gradient(125deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.62) 40%, rgba(255,255,255,.42) 100%);
   box-shadow:
-    0 4px 10px -6px rgba(38,34,74,.32),
-    inset 0 3px 12px rgba(38,34,74,.13),
-    inset 0 1px 0 rgba(255,255,255,.5);
+    0 2px 6px -4px rgba(30,30,60,.25),
+    inset 0 2px 9px rgba(30,30,60,.09);
 """
 
 st.markdown(f"""
 <style>
-  .stApp {{
-    background:
-      radial-gradient(900px 620px at 0% 0%, rgba(98,80,214,.20), transparent 64%),
-      radial-gradient(820px 560px at 100% 0%, rgba(42,120,214,.15), transparent 62%),
-      radial-gradient(760px 620px at 28% 62%, rgba(98,80,214,.08), transparent 64%),
-      radial-gradient(900px 700px at 78% 100%, rgba(235,104,52,.12), transparent 64%),
-      #f2f1ed !important;
-    background-attachment: fixed !important;
-  }}
-  [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stBottomBlockContainer"] {{
-    background: transparent !important; }}
-  header[data-testid="stHeader"] {{ background: rgba(243,242,238,.55) !important;
-    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }}
-  section[data-testid="stSidebar"] {{ background: rgba(239,238,233,.62) !important;
-    -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%);
-    border-right: 1px solid rgba(255,255,255,.7); }}
   .tile, .cm .cell, .pred, .note {{ {GLASS} }}
   .tile:hover, .cm .cell:hover, .pred:hover {{ {GLASS_PRESSED} }}
   @media (prefers-reduced-motion: reduce) {{
@@ -238,6 +214,22 @@ def load_json(name):
     return json.loads((BASE / name).read_text(encoding="utf-8"))
 
 
+def merc(lat):
+    """Projeção de Mercator (em graus), para o mapa não ficar achatado."""
+    return float(np.degrees(np.log(np.tan(np.pi / 4 + np.radians(lat) / 2))))
+
+
+def uf_outline(geom):
+    """Contorno de um estado (Polygon/MultiPolygon do GeoJSON) em listas x/y separadas por None."""
+    polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
+    xs, ys = [], []
+    for poly in polys:
+        ring = poly[0]
+        xs += [p[0] for p in ring] + [None]
+        ys += [merc(p[1]) for p in ring] + [None]
+    return xs, ys
+
+
 @st.cache_resource
 def load_model(fname):
     return joblib.load(BASE / fname)
@@ -288,6 +280,7 @@ SLUG = S["slug"]
 M = S["models"]
 MA = M[algo]
 SHORT, QUESTION = SCEN_INFO[SLUG]
+SHORT_LC = SHORT[0].lower() + SHORT[1:]  # "encaminhamento DEAM", sem baixar a sigla
 
 # ---------------------------------------------------------------------------
 # Cabeçalho
@@ -375,7 +368,7 @@ with tab_over:
                             line=dict(color=C["pos"], width=2)),
                 customdata=[br(n) if n else "–" for n in ns],
                 hovertemplate="%{x}: %{y:.1%}<br>%{customdata} notificações no ano<extra></extra>"))
-            layout(fig, 360, f"Taxa do desfecho por ano — {SHORT.lower()}", legend=False)
+            layout(fig, 360, f"Taxa do desfecho por ano — {SHORT_LC}", legend=False)
             fig.update_yaxes(tickformat=".0%")
             fig.update_xaxes(dtick=2)
             plot(fig, "rate_year")
@@ -690,11 +683,10 @@ with tab_feat:
 # =========================================================================== #
 # 4. ASSOCIAÇÕES (descritivo, dados de treino)
 # =========================================================================== #
-TILE = {"RR": (1, 0), "AP": (3, 0), "AM": (1, 1), "PA": (2, 1), "MA": (3, 1), "CE": (4, 1), "RN": (5, 1),
-        "AC": (0, 2), "RO": (1, 2), "TO": (2, 2), "PI": (3, 2), "PE": (4, 2), "PB": (5, 2),
-        "MT": (1, 3), "GO": (2, 3), "BA": (3, 3), "SE": (4, 3), "AL": (5, 3),
-        "MS": (1, 4), "DF": (2, 4), "MG": (3, 4), "ES": (4, 4),
-        "PR": (1, 5), "SP": (2, 5), "RJ": (3, 5), "SC": (1, 6), "RS": (1, 7)}
+# Estados pequenos demais para o rótulo caber dentro: rótulo fora, com linha até o estado (lon, lat).
+UF_LINE_FROM = {"PE": (-35.7, -8.25)}  # ponto de partida da linha quando o centro do estado fica longe da costa
+UF_CALLOUT = {"RN": (-33.9, -5.0), "PB": (-33.6, -6.7), "PE": (-33.6, -8.4), "AL": (-34.0, -10.1),
+              "SE": (-35.4, -11.9), "ES": (-38.4, -20.3), "RJ": (-40.6, -23.9), "DF": (-49.9, -14.0)}
 ORDINAL_COLS = {"faixa_etaria", "escolaridade_paciente", "mes_ocorrencia", "dia_semana_ocorrencia", "faixa_horaria",
                 "numero_envolvidos"}
 FAIXA_ORDER = {"madrugada": 0, "manha": 1, "tarde": 2, "noite": 3}
@@ -743,30 +735,65 @@ with tab_assoc:
     rr = pd.DataFrame(S["category_rates"][var])
     prev = S["prevalence_train"]
     if var == "uf_ocorrencia":
-        c1, c2 = st.columns([1, 1.2], gap="large")
+        c1, c2 = st.columns([1.35, 1], gap="large")
         with c1:
-            z = np.full((8, 6), np.nan)
-            txt = np.full((8, 6), "", dtype=object)
-            hov = np.full((8, 6), "", dtype=object)
-            for r in rr.itertuples():
-                if r.code in TILE:
-                    cx, cy = TILE[r.code]
-                    z[cy, cx] = r.rate
-                    txt[cy, cx] = f"<b>{r.code}</b><br>{pct(r.rate, 0)}"
-                    hov[cy, cx] = f"{r.code}: {pct(r.rate)} · {br(r.n)} casos"
-            fig = go.Figure(go.Heatmap(
-                z=z, text=txt, texttemplate="%{text}", textfont=dict(size=11), customdata=hov,
-                hovertemplate="%{customdata}<extra></extra>", xgap=4, ygap=4,
-                colorscale=[[i / (len(SEQ) - 1), c] for i, c in enumerate(SEQ)],
-                colorbar=dict(title=dict(text="taxa", side="top"), tickformat=".0%", thickness=10, len=0.6)))
-            layout(fig, 470, "Mapa em mosaico (um quadrado por UF)", legend=False)
-            fig.update_xaxes(visible=False)
-            fig.update_yaxes(visible=False, autorange="reversed", scaleanchor="x")
-            plot(fig, "tilemap")
+            geo = load_json("br_uf.geojson")
+            props = {f["id"]: f["properties"] for f in geo["features"]}
+            ufr = rr[rr.code.isin(list(props))].set_index("code")
+            lo, hi = float(ufr["rate"].min()), float(ufr["rate"].max())
+            scale = [[i / (len(SEQ) - 1), c] for i, c in enumerate(SEQ)]
+            fig = go.Figure()
+            for f in geo["features"]:
+                uf = f["id"]
+                if uf not in ufr.index:
+                    continue
+                r = ufr.loc[uf]
+                t = (r["rate"] - lo) / max(hi - lo, 1e-9)
+                xs, ys = uf_outline(f["geometry"])
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, mode="lines", fill="toself", hoveron="fills", hoverinfo="text",
+                    fillcolor=sample_colorscale(scale, [t])[0], line=dict(color="#ffffff", width=1.1),
+                    text=f"<b>{props[uf]['nome']}</b><br>{pct(r['rate'])} · {br(r['n'])} casos", showlegend=False))
+            order = [f["id"] for f in geo["features"] if f["id"] in ufr.index]
+            inside = [u for u in order if u not in UF_CALLOUT]
+            fig.add_trace(go.Scatter(
+                x=[props[u]["lon"] for u in inside], y=[merc(props[u]["lat"]) for u in inside], text=inside,
+                mode="text", hoverinfo="skip", showlegend=False,
+                textfont=dict(size=10.5, family=FONT,
+                              color=["#ffffff" if (ufr.loc[u, "rate"] - lo) / max(hi - lo, 1e-9) > .55 else "#1d1d1b"
+                                     for u in inside])))
+            out = [u for u in order if u in UF_CALLOUT]
+            lx, ly = [], []
+            for u in out:  # linha fina do estado até o rótulo de fora
+                x0, y0 = UF_LINE_FROM.get(u, (props[u]["lon"], props[u]["lat"]))
+                lx += [x0, UF_CALLOUT[u][0], None]
+                ly += [merc(y0), merc(UF_CALLOUT[u][1]), None]
+            fig.add_trace(go.Scatter(x=lx, y=ly, mode="lines", hoverinfo="skip", showlegend=False,
+                                     line=dict(color="#8a8984", width=0.8)))
+            fig.add_trace(go.Scatter(
+                x=[UF_CALLOUT[u][0] for u in out], y=[merc(UF_CALLOUT[u][1]) for u in out], text=out,
+                mode="text", hoverinfo="skip", showlegend=False,
+                textposition=["middle left" if UF_CALLOUT[u][0] < props[u]["lon"] else "middle right" for u in out],
+                textfont=dict(size=10.5, family=FONT, color="#1d1d1b")))
+            fig.add_trace(go.Scatter(  # só para desenhar a barra de cores
+                x=[props[order[0]]["lon"]] * 2, y=[merc(props[order[0]]["lat"])] * 2, mode="markers", hoverinfo="skip",
+                showlegend=False, marker=dict(size=0.1, opacity=0, color=[lo, hi], cmin=lo, cmax=hi, colorscale=scale,
+                                              showscale=True, colorbar=dict(
+                                                  title=dict(text="taxa", side="top"), tickformat=".0%", thickness=10,
+                                                  len=0.34, x=1.0, xanchor="right", y=0.02, yanchor="bottom",
+                                                  outlinewidth=0))))
+            layout(fig, 620, f"Mapa por UF — taxa de {SHORT_LC}", legend=False)
+            fig.update_xaxes(visible=False, fixedrange=True, range=[-74.5, -30.5], constrain="domain")
+            fig.update_yaxes(visible=False, fixedrange=True, scaleanchor="x", scaleratio=1,
+                             range=[merc(-34.3), merc(5.8)], constrain="domain")
+            fig.update_layout(margin=dict(l=0, r=0, t=4, b=0), hoverdistance=1)
+            plot(fig, "ufmap")
+            st.caption("Malha estadual do IBGE (simplificada). Passe o mouse para ver o nome do estado, a taxa e o número de casos.")
         with c2:
             rrs = rr[rr.code != F.MISSING].sort_values("rate")
+            bar_cols = sample_colorscale(scale, [(v - lo) / max(hi - lo, 1e-9) for v in rrs["rate"]])
             fig = go.Figure(go.Bar(x=rrs["rate"], y=rrs["code"], orientation="h", width=0.62,
-                                   marker=dict(color=C["pos"], cornerradius=4),
+                                   marker=dict(color=bar_cols, cornerradius=4),
                                    customdata=[br(n) for n in rrs["n"]],
                                    hovertemplate="%{y}: %{x:.1%} · %{customdata} casos<extra></extra>"))
             fig.add_vline(x=prev, line=dict(color=C["muted"], width=1))
@@ -789,7 +816,7 @@ with tab_assoc:
         fig.add_hline(y=prev, line=dict(color=C["muted"], width=1))
         fig.add_annotation(x=1, xref="paper", y=prev, text=f"média {pct(prev)}", showarrow=False, xanchor="right",
                            yanchor="bottom", font=dict(size=11, color=C["muted"]))
-        layout(fig, 380, f"{flabel(var)} — taxa de {SHORT.lower()}", legend=False)
+        layout(fig, 380, f"{flabel(var)} — taxa de {SHORT_LC}", legend=False)
         fig.update_yaxes(tickformat=".0%", rangemode="tozero")
         plot(fig, "rate_bars")
 
